@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>General Heading Information Form</title>
+    <link rel="stylesheet" href="2025-08-31-css-sheet.css">
+</head>
+<body>
+<main>
+<section>
+    <h1>General Heading Creation</h1>
+    <form>
+        <fieldset>
+            <legend>Court Information</legend>
+            <label>Court File Number: CV-</label>
+            <input type="text" id="court-file-year" name="courtfile-number-year" maxlength="2" size="2">-
+            <input type="text" id="court-file-assigned" name="courtfile-number-assigned" maxlength="6" size="6">-
+            <input type="text" id="court-file-suffix" name="courtfile-number-suffix" maxlength="4" size="4">
+
+        <div>
+            <label for="name-of-court">Name of Court: </label>
+            <input type="text" id="name-of-court" name="name-of-the-court" required placeholder="ONTARIO SUPERIOR COURT OF JUSTICE" size="40">
+        </fieldset>
+    </div>
+       
+        <fieldset id="plaintiff-information">
+            <legend>Plaintiff(s) Information</legend>
+            <div>
+            <label for="plaintifffirstname">First Name:</label>
+            <input type="text" id="plaintiff-first-name" name="plaintiff-first" required placeholder="e.g. John">
+    </div>
+
+        <div>
+          <label for="plaintiff-last-name">Last Name:</label>
+          <input type="text" id="plaintiff-last-name" name="plaintiff-last" required placeholder="e.g. Smith">
+        </fieldset>
+    </div>
+    <div>
+        <fieldset id="defendant-information">
+            <legend>Defendant(s) Information</legend>
+            <div>
+            <label for="defendant-first-name">First Name:</label>
+            <input type="text" id="defendant-first-name" name="defendant-first" required placeholder="e.g. John">
+    </div>
+    
+        <div>
+          <label for="defendant-last-name">Last Name:</label>
+          <input type="text" id="defendant-last-name" name="defendant-last" required placeholder="e.g. Smith">
+        </div>
+        </fieldset>
+    </div> <button type="submit">Submit</button></button>
+    </form>
+</section>
+    
+</main>
+</body>
+</html>

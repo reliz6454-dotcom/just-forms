@@ -11,3 +11,8 @@ h1 {
 fieldset {
     width: 600px;
 }
+
+#role-detail-box {
+    display: none;
+    margin-top: 8px;
+}

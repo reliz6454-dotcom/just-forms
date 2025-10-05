@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Information Required for Affidavit Introductory Clause</title>
+    <link rel="stylesheet" href="2025-08-31-css-sheet.css">
+</head>
+<body>
+    <main>
+        <section>
+            <h1>Information Required for Affidavit Introductory Clause</h1>
+            <p>In Ontario, Affidavit Form 4A begins with a standardized <strong>introductory clause</strong>. This section provides the court with important details about you, the <em>deponent</em> (the person swearing or affirming the affidavit). The information you enter here will be used to complete that introductory clause.</p>
+            <p>Please provide the following details:</p>
+            <form>
+                <fieldset>
+                    <legend>Your Name and Location</legend>
+                    <label for ="deponent-name">Full Name:</label>
+                    <input type="text" id="deponent-name" name="deponent-name">
+                    <br>
+                    <label for="deponent-city">City or Town:</label>
+                    <input type="text" id="deponent-city" name="deponent-city">
+                    <br>
+                    <label for="deponent-county">County or Region:</label>
+                    <input type="text" id="deponent-county" name="deponent-county">
+                </fieldset>
+                <fieldset>
+                    <legend>My Role in this Case</legend>
+                    <input type="radio" id="role-plaintiff" name="role" value="plaintiff" required>
+                    <label for="role-plaintiff">I am the Plaintiff (the person bringing the case)</label>
+                    <br>
+                    <input type="radio" id="role-defendant" name="role" value="defendant">
+                    <label for="role-defendant">I am the Defendant (the person responding to the case)</label>
+                    <br>
+                    <input type="radio" id="role-lawyer" name="role" value="lawyer">
+                    <label for="role-lawyer">I am the Lawyer for a party</label>
+                    <br>
+                    <input type="radio" id="role-officer" name="role" value="officer">
+                    <label for="role-officer">I am a Director/Officer of a company involved in the case</label>
+                    <br>
+                    <input type="radio" id="role-employee" name="role" value="employee">
+                    <label for="role-employee">I am an Employee of a company involved in the case</label>
+                    <br>
+                    <div id="role-detail-box">
+                        <label for="role-detail">If officer or employee, state role:</label>
+                        <input type="text" id="role-detail" name="role-detail">
+                    </div>
+                </fieldset>
+                <p>Ontario affidavits require you to choose either an oath or an affirmation. Swearing an oath is a religious form; affirming is a non-religious form. People choose one or the other based on personal convictions or conscience. Both choices have the same legal effect, and the court does not prefer one over the other. </p>
+                <fieldset>
+                    <legend>Swear or Affirm</legend>
+                    <input type="radio" id="swear" name="oath" value="swear" required>
+                    <label for="swear">I will swear an oath (religious)</label>
+                    <br>
+                    <input type="radio" id="affirm" name="oath" value="affirm">
+                    <label for="affirm">I will affirm (non-religious)</label>
+                </fieldset>
+                <button type="submit">Submit</button>
+            </form>
+        </section>
+    </main>
+    <script src="affidavit-intro.js"></script>
+</body>
+</html>

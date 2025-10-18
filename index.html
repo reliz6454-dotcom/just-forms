@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <title>General Heading Information Form</title>
-    <link rel="stylesheet" href="2025-08-31-css-sheet.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main>
 <section>
     <h1>General Heading Creation</h1>
-    In Ontario, all court documents begin with a <strong>general heading</strong>. This heading identifies the court, the file number, and the parties involved. Once created it will apply to all documents in your case, including affidavits. Please provide the following information:
-    <form>
+    <p>In Ontario, all court documents begin with a <strong>general heading</strong>. This heading identifies the court, the file number, and the parties involved. Once created it will apply to all documents in your case, including affidavits. Please provide the following information:</p>
+    <form id="general-heading-form">
         <fieldset>
             <legend>Court Information</legend>
             <label>Court File Number: CV-</label>
@@ -20,39 +20,40 @@
 
         <div>
             <label for="name-of-court">Name of Court: </label>
-            <input type="text" id="name-of-court" name="name-of-the-court" required placeholder="ONTARIO SUPERIOR COURT OF JUSTICE" size="40">
-        </fieldset>
+        <input type="text" id="name-of-court" name="name-of-the-court" required placeholder="e.g. Ontario Superior Court of Justice" size="40">
     </div>
+    </fieldset>
        
         <fieldset id="plaintiff-information">
             <legend>Plaintiff(s) Information</legend>
             <div>
-            <label for="plaintifffirstname">First Name:</label>
-            <input type="text" id="plaintiff-first-name" name="plaintiff-first" required placeholder="e.g. John">
+            <label for="plaintiff-first-name">First Name:</label>
+            <input type="text" id="plaintiff-first-name" name="plaintiff-first-name" required placeholder="e.g. John">
     </div>
 
         <div>
-          <label for="plaintiff-last-name">Last Name:</label>
-          <input type="text" id="plaintiff-last-name" name="plaintiff-last" required placeholder="e.g. Smith">
-        </fieldset>
+    <label for="plaintiff-last-name">Last Name:</label>
+    <input type="text" id="plaintiff-last-name" name="plaintiff-last-name" required placeholder="e.g. Smith">
     </div>
+    </fieldset>
     <div>
         <fieldset id="defendant-information">
             <legend>Defendant(s) Information</legend>
             <div>
             <label for="defendant-first-name">First Name:</label>
-            <input type="text" id="defendant-first-name" name="defendant-first" required placeholder="e.g. John">
+            <input type="text" id="defendant-first-name" name="defendant-first-name" required placeholder="e.g. John">
     </div>
     
         <div>
-          <label for="defendant-last-name">Last Name:</label>
-          <input type="text" id="defendant-last-name" name="defendant-last" required placeholder="e.g. Smith">
+        <label for="defendant-last-name">Last Name:</label>
+        <input type="text" id="defendant-last-name" name="defendant-last-name" required placeholder="e.g. Smith">
         </div>
         </fieldset>
-    </div> <button type="submit">Submit</button></button>
+    </div> <button type="submit">Submit</button>
     </form>
 </section>
     
 </main>
+<script src="general-heading.js"></script>
 </body>
 </html>

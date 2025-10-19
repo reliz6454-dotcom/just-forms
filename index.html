@@ -1,59 +1,178 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>General Heading Information Form</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <title>General Heading Information Form</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 <main>
-<section>
+  <section>
     <h1>General Heading Creation</h1>
-    <p>In Ontario, all court documents begin with a <strong>general heading</strong>. This heading identifies the court, the file number, and the parties involved. Once created it will apply to all documents in your case, including affidavits. Please provide the following information:</p>
+    <p class="form-preamble">
+      In Ontario, all court documents begin with a <strong>general heading</strong>. This heading identifies the court, the file number, and the parties involved. Once created it will apply to all documents in your case, including affidavits. Please provide the following information:
+    </p>
+
     <form id="general-heading-form">
-        <fieldset>
-            <legend>Court Information</legend>
-            <label>Court File Number: CV-</label>
-            <input type="text" id="court-file-year" name="courtfile-number-year" maxlength="2" size="2">-
-            <input type="text" id="court-file-assigned" name="courtfile-number-assigned" maxlength="6" size="6">-
-            <input type="text" id="court-file-suffix" name="courtfile-number-suffix" maxlength="4" size="4">
+      <!-- Court Information -->
+      <fieldset>
+        <legend>Court Information</legend>
+
+        <label for="court-file-year">Court File Number: CV -</label>
+        <input type="text" id="court-file-year" name="courtfile-number-year" maxlength="2" size="2"> -
+        <input type="text" id="court-file-assigned" name="courtfile-number-assigned" maxlength="6" size="6"> -
+        <input type="text" id="court-file-suffix" name="courtfile-number-suffix" maxlength="4" size="4">
 
         <div>
-            <label for="name-of-court">Name of Court: </label>
-        <input type="text" id="name-of-court" name="name-of-the-court" required placeholder="e.g. Ontario Superior Court of Justice" size="40">
-    </div>
-    </fieldset>
-       
-        <fieldset id="plaintiff-information">
-            <legend>Plaintiff(s) Information</legend>
-            <div>
-            <label for="plaintiff-first-name">First Name:</label>
-            <input type="text" id="plaintiff-first-name" name="plaintiff-first-name" required placeholder="e.g. John">
-    </div>
-
-        <div>
-    <label for="plaintiff-last-name">Last Name:</label>
-    <input type="text" id="plaintiff-last-name" name="plaintiff-last-name" required placeholder="e.g. Smith">
-    </div>
-    </fieldset>
-    <div>
-        <fieldset id="defendant-information">
-            <legend>Defendant(s) Information</legend>
-            <div>
-            <label for="defendant-first-name">First Name:</label>
-            <input type="text" id="defendant-first-name" name="defendant-first-name" required placeholder="e.g. John">
-    </div>
-    
-        <div>
-        <label for="defendant-last-name">Last Name:</label>
-        <input type="text" id="defendant-last-name" name="defendant-last-name" required placeholder="e.g. Smith">
+          <label for="name-of-court">Name of Court: </label>
+          <input type="text" id="name-of-court" name="name-of-the-court" required placeholder="ONTARIO SUPERIOR COURT OF JUSTICE" size="40">
         </div>
-        </fieldset>
-    </div> <button type="submit">Submit</button>
+      </fieldset>
+
+      <!-- Plaintiffs -->
+      <fieldset id="plaintiff-information">
+        <legend>Plaintiff(s) Information</legend>
+
+        <p class="form-instruction">
+          Enter the first plaintiff (the first name listed on your Statement of Claim or Notice of Application).
+        </p>
+        <p class="form-instruction">
+          If the plaintiff is an individual, use First and Last Name. If it is a company, leave the person fields blank and enter the full legal company name.
+        </p>
+
+        <!-- First plaintiff (always visible) -->
+        <div class="party-block party-first" data-index="1">
+          <div class="name-row">
+            <div>
+              <label for="plaintiff-first-name">First Name:</label>
+              <input type="text" id="plaintiff-first-name" class="pl-first" placeholder="e.g. John">
+            </div>
+            <div>
+              <label for="plaintiff-last-name">Last Name:</label>
+              <input type="text" id="plaintiff-last-name" class="pl-last" placeholder="e.g. Smith">
+            </div>
+          </div>
+
+          <div class="or-separator">– OR –</div>
+
+          <div>
+            <label for="plaintiff-company">Company Legal Name:</label>
+            <input type="text" id="plaintiff-company" class="pl-company" placeholder="e.g. 123 Ontario Inc.">
+          </div>
+
+          <div class="party-actions">
+            <button type="button" id="add-plaintiff-initial" class="add-party-btn">+ Add another plaintiff</button>
+          </div>
+        </div>
+
+        <!-- Added plaintiffs appear here -->
+        <div id="extra-plaintiffs" class="party-list"></div>
+
+        <!-- Template for additional plaintiffs -->
+        <template id="plaintiff-row-template">
+          <div class="party-block" data-index="">
+            <div class="name-row">
+              <div>
+                <label>First Name:</label>
+                <input type="text" class="pl-first" placeholder="e.g. Jane">
+              </div>
+              <div>
+                <label>Last Name:</label>
+                <input type="text" class="pl-last" placeholder="e.g. Doe">
+              </div>
+            </div>
+
+            <div class="or-separator">– OR –</div>
+
+            <div>
+              <label>Company Legal Name:</label>
+              <input type="text" class="pl-company" placeholder="e.g. ABC Corporation">
+            </div>
+
+            <div class="party-actions">
+              <button type="button" class="add-party-btn add-more">+ Add another plaintiff</button>
+              <button type="button" class="remove-party-btn">Remove</button>
+            </div>
+          </div>
+        </template>
+      </fieldset>
+
+      <!-- Defendants -->
+      <fieldset id="defendant-information">
+        <legend>Defendant(s) Information</legend>
+
+        <p class="form-instruction">
+          Enter the first defendant (the first name listed on your Statement of Claim or Notice of Application).
+        </p>
+        <p class="form-instruction">
+          If the defendant is an individual, use First and Last Name.
+        </p>
+        <p class="form-instruction">
+          If the defendant is a company, leave the person fields blank and enter the full legal company name.
+        </p>
+
+        <!-- First defendant (always visible) -->
+        <div class="party-block def-party-first" data-index="1">
+          <div class="name-row">
+            <div>
+              <label for="df-first">First Name:</label>
+              <input type="text" class="df-first" id="df-first" name="defendant-first" placeholder="e.g. John">
+            </div>
+            <div>
+              <label for="df-last">Last Name:</label>
+              <input type="text" class="df-last" id="df-last" name="defendant-last" placeholder="e.g. Smith">
+            </div>
+          </div>
+
+          <div class="or-separator">– OR –</div>
+
+          <div>
+            <label for="df-company">Company Legal Name:</label>
+            <input type="text" class="df-company" id="df-company" name="defendant-company" placeholder="e.g. ABC Ontario Inc.">
+          </div>
+
+          <div class="party-actions">
+            <button type="button" id="add-defendant-initial" class="add-party-btn">+ Add another defendant</button>
+          </div>
+        </div>
+
+        <!-- Added defendants appear here -->
+        <div id="extra-defendants" class="party-list"></div>
+
+        <!-- Template for additional defendants -->
+        <template id="defendant-row-template">
+          <div class="party-block" data-index="">
+            <div class="name-row">
+              <div>
+                <label>First Name:</label>
+                <input type="text" class="df-first" placeholder="e.g. Jane">
+              </div>
+              <div>
+                <label>Last Name:</label>
+                <input type="text" class="df-last" placeholder="e.g. Doe">
+              </div>
+            </div>
+
+            <div class="or-separator">– OR –</div>
+
+            <div>
+              <label>Company Legal Name:</label>
+              <input type="text" class="df-company" placeholder="e.g. XYZ Ltd.">
+            </div>
+
+            <div class="party-actions">
+              <button type="button" class="add-party-btn add-more">+ Add another defendant</button>
+              <button type="button" class="remove-party-btn">Remove</button>
+            </div>
+          </div>
+        </template>
+      </fieldset>
+
+      <button type="submit">Submit</button>
     </form>
-</section>
-    
+  </section>
 </main>
+
 <script src="general-heading.js"></script>
 </body>
 </html>

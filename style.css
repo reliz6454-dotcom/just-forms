@@ -33,8 +33,6 @@ fieldset {
   max-width: 700px;
 }
 
-
-
 /* “– OR –” separator (now left-aligned) */
 .or-separator {
   text-align: left;
@@ -118,9 +116,6 @@ button:disabled,
 
 /* --- Helper/utility for screen readers --- */
 .visually-hidden{position:absolute!important;clip:rect(1px,1px,1px,1px);padding:0;border:0;height:1px;width:1px;overflow:hidden;white-space:nowrap}
-
-
-
 
 /* --- Affidavit paragraph numbering area --- */
 .para-num-row {
@@ -347,4 +342,57 @@ button {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+
+/* ============================================================================
+   General Heading (scoped, Word-like preview) — UPDATED
+   ============================================================================ */
+#heading .gh {
+  max-width: 6.5in;              /* 8.5" page with ~1" side margins */
+  margin: 0 auto 10px auto;      /* center within card */
+  padding: 0;
+  font-family: "Times New Roman", Times, serif; /* Word-like appearance (optional) */
+}
+
+/* Double-spaced lines, no extra margins so spacing is consistent */
+#heading .gh-line {
+  line-height: 2;  /* true double spacing */
+  margin: 0;       /* remove previous 6pt so it doesn't stack with line-height */
+}
+
+/* L1: Court File No. (right) */
+#heading .gh-file-no {
+  text-align: right;
+}
+
+/* L2: Court name (center, bold + italic, uppercase) */
+#heading .gh-court {
+  text-align: center;
+  font-weight: 700;
+  font-style: italic;          /* NEW: italicized */
+  text-transform: uppercase;
+}
+
+/* L3: BETWEEN (left, semi-bold) */
+#heading .gh-between {
+  text-align: left;
+  font-weight: 600;
+}
+
+/* L4 & L7 parties, and L6 -AND- stay centered */
+#heading .gh-parties,
+#heading .gh-and {
+  text-align: center;
+}
+
+/* L6: -AND- (no extra margins so double spacing remains exact) */
+#heading .gh-and {
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+/* L5 & L8 roles: RIGHT-ALIGNED per request (overrides prior center) */
+#heading .gh-role {
+  text-align: right;           /* NEW: right-aligned roles */
+  font-style: normal;
 }

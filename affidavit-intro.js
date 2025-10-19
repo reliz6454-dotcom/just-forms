@@ -1,11 +1,34 @@
-// affidavit-intro.js (drop-in replacement)
+// affidavit-intro.js — deponent + conditional affiliation (officer/employee OR lawyer)
 
 // --- Keys ---
 const LS_CASE_KEY = "jf_case";
 const LS_OATH_KEY = "jf_oathType";
 
-// --- Helper for values ---
+// --- Helpers ---
 const val = (id) => (document.getElementById(id)?.value || "").trim();
+function loadCase() {
+  try { return JSON.parse(localStorage.getItem(LS_CASE_KEY) || "{}"); }
+  catch { return {}; }
+}
+function partyDisplayName(p) {
+  if (!p) return "";
+  const company = (p.company || "").trim();
+  const person = [p.first || "", p.last || ""].map(s => s.trim()).filter(Boolean).join(" ").trim();
+  return company || person || "";
+}
+function populatePartySelect(selectEl, side) {
+  const data = loadCase() || {};
+  const list = Array.isArray(side === "plaintiff" ? data.plaintiffs : data.defendants)
+    ? (side === "plaintiff" ? data.plaintiffs : data.defendants)
+    : [];
+  selectEl.innerHTML = '<option value="">— Select party —</option>';
+  list.forEach((p, idx) => {
+    const opt = document.createElement("option");
+    opt.value = String(idx);
+    opt.textContent = partyDisplayName(p) || `Party #${idx + 1}`;
+    selectEl.appendChild(opt);
+  });
+}
 
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.querySelector("form");
@@ -13,91 +36,170 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Inputs
   const first = document.getElementById("deponent-first-name");
-  const last  = document.getElementById("deponent-last-name"); // (spelling kept to match your HTML)
+  const last  = document.getElementById("deponent-last-name");
   const city  = document.getElementById("deponent-city");
   const prov  = document.getElementById("deponent-province");
-  const roleDetailBox = document.getElementById("role-detail-box");
-  const roleDetail = document.getElementById("role-detail");
 
-  // Radios
+  // Role / Oath radios
   const roleRadios = Array.from(document.querySelectorAll('input[name="role"]'));
   const oathRadios = Array.from(document.querySelectorAll('input[name="oath"]'));
 
-  // 1) Make key fields required (in case HTML doesn't have required)
-  [first, last, city, prov].forEach(input => {
-    if (input) input.setAttribute("required", "");
-  });
-  // Role group: put required on one radio in the group if none has it
+  // Officer/Employee UI
+  const roleDetailBox    = document.getElementById("role-detail-box");
+  const roleDetail       = document.getElementById("role-detail");
+  const affiliationBox   = document.getElementById("affiliation-box");
+  const affSidePl        = document.getElementById("aff-side-plaintiff");
+  const affSideDf        = document.getElementById("aff-side-defendant");
+  const affiliationParty = document.getElementById("affiliation-party");
+
+  // Lawyer UI
+  const lawyerBox   = document.getElementById("lawyer-box");
+  const lawSidePl   = document.getElementById("law-side-plaintiff");
+  const lawSideDf   = document.getElementById("law-side-defendant");
+  const lawyerParty = document.getElementById("lawyer-party");
+
+  // Require basic person + location fields
+  [first, last, city, prov].forEach(i => i && i.setAttribute("required", ""));
   if (!roleRadios.some(r => r.hasAttribute("required"))) {
-    const firstRole = roleRadios[0];
-    if (firstRole) firstRole.setAttribute("required", "");
+    roleRadios[0]?.setAttribute("required", "");
   }
-  // Oath group: keep your existing required on #swear; ensure at least one has required
   if (!oathRadios.some(r => r.hasAttribute("required"))) {
-    const swear = document.getElementById("swear");
-    if (swear) swear.setAttribute("required", "");
+    document.getElementById("swear")?.setAttribute("required", "");
   }
 
-  // 2) Show/hide role detail + make it conditionally required
-  function updateRoleDetailRequired() {
-    const selected = document.querySelector('input[name="role"]:checked')?.value;
-    const needsDetail = selected === "officer" || selected === "employee";
+  // Show/hide + conditional required
+  function updateRoleUI() {
+    const selected = document.querySelector('input[name="role"]:checked')?.value || "";
 
-    roleDetailBox.style.display = needsDetail ? "block" : "none";
+    const isOfficerOrEmployee = selected === "officer" || selected === "employee";
+    const isLawyer = selected === "lawyer";
 
-    if (needsDetail) {
+    // Officer/Employee: show role detail + affiliation
+    roleDetailBox.style.display  = isOfficerOrEmployee ? "block" : "none";
+    affiliationBox.style.display = isOfficerOrEmployee ? "block" : "none";
+
+    if (isOfficerOrEmployee) {
       roleDetail.setAttribute("required", "");
-      // Clear any stale custom error when user starts typing
-      roleDetail.oninput = () => roleDetail.setCustomValidity("");
+      affiliationParty.setAttribute("required", "");
     } else {
       roleDetail.removeAttribute("required");
       roleDetail.setCustomValidity("");
+      affiliationParty.removeAttribute("required");
+      // clear choices
+      if (affSidePl) affSidePl.checked = false;
+      if (affSideDf) affSideDf.checked = false;
+      affiliationParty.innerHTML = '<option value="">— Select party —</option>';
+    }
+
+    // Lawyer: show its own affiliation box
+    lawyerBox.style.display = isLawyer ? "block" : "none";
+    if (isLawyer) {
+      lawyerParty.setAttribute("required", "");
+    } else {
+      lawyerParty.removeAttribute("required");
+      if (lawSidePl) lawSidePl.checked = false;
+      if (lawSideDf) lawSideDf.checked = false;
+      lawyerParty.innerHTML = '<option value="">— Select party —</option>';
     }
   }
 
-  roleRadios.forEach(r => r.addEventListener("change", updateRoleDetailRequired));
-  updateRoleDetailRequired(); // initial state
+  roleRadios.forEach(r => r.addEventListener("change", updateRoleUI));
+  updateRoleUI();
 
-  // 3) Handle submit with validation
+  // Populate selects when a side gets chosen
+  [affSidePl, affSideDf].forEach(r => r && r.addEventListener("change", () => {
+    const side = affSidePl?.checked ? "plaintiff" : (affSideDf?.checked ? "defendant" : "");
+    if (side) populatePartySelect(affiliationParty, side);
+  }));
+  [lawSidePl, lawSideDf].forEach(r => r && r.addEventListener("change", () => {
+    const side = lawSidePl?.checked ? "plaintiff" : (lawSideDf?.checked ? "defendant" : "");
+    if (side) populatePartySelect(lawyerParty, side);
+  }));
+
+  // Submit
   form.addEventListener("submit", (e) => {
     e.preventDefault();
-
-    // Trigger built-in validation first (required, etc.)
     if (!form.reportValidity()) return;
 
-    // Extra guard: if role requires detail and it's empty, block and focus
     const selectedRole = document.querySelector('input[name="role"]:checked')?.value || "";
-    const needsDetail = selectedRole === "officer" || selectedRole === "employee";
-    if (needsDetail && !val("role-detail")) {
-      roleDetail.setCustomValidity("Please specify your capacity (e.g., Director, Manager).");
-      form.reportValidity();
-      roleDetail.focus();
-      return;
-    } else {
-      roleDetail.setCustomValidity("");
+    const isOfficerOrEmployee = selectedRole === "officer" || selectedRole === "employee";
+    const isLawyer = selectedRole === "lawyer";
+
+    // Officer/Employee validation
+    let roleSide = null;
+    let rolePartyIndex = null;
+    if (isOfficerOrEmployee) {
+      if (!val("role-detail")) {
+        roleDetail.setCustomValidity("Please specify your role/title (e.g., Director, Manager).");
+        form.reportValidity();
+        roleDetail.focus();
+        return;
+      } else {
+        roleDetail.setCustomValidity("");
+      }
+      roleSide = affSidePl?.checked ? "plaintiff" : (affSideDf?.checked ? "defendant" : null);
+      if (!roleSide) {
+        alert("Please choose whether you are an officer/employee of the plaintiff(s) or defendant(s).");
+        (affSidePl || affSideDf)?.focus();
+        return;
+      }
+      if (!affiliationParty.value) {
+        alert("Please select the specific party.");
+        affiliationParty.focus();
+        return;
+      }
+      rolePartyIndex = parseInt(affiliationParty.value, 10);
+      if (!Number.isInteger(rolePartyIndex)) {
+        alert("Please select a valid party.");
+        affiliationParty.focus();
+        return;
+      }
     }
 
-    // 4) Save the oath (swear/affirm)
-    const oathRadio = document.querySelector('input[name="oath"]:checked');
-    const oath = oathRadio ? oathRadio.value : null;
-    if (!oath) {
-      // Shouldn't happen because of required, but guard anyway
-      alert("Please choose whether you will swear or affirm.");
-      return;
+    // Lawyer validation
+    let lawyerSide = null;
+    let lawyerPartyIndex = null;
+    if (isLawyer) {
+      lawyerSide = lawSidePl?.checked ? "plaintiff" : (lawSideDf?.checked ? "defendant" : null);
+      if (!lawyerSide) {
+        alert("Please choose whether you are the lawyer for the plaintiff(s) or defendant(s).");
+        (lawSidePl || lawSideDf)?.focus();
+        return;
+      }
+      if (!lawyerParty.value) {
+        alert("Please select the specific party you represent.");
+        lawyerParty.focus();
+        return;
+      }
+      lawyerPartyIndex = parseInt(lawyerParty.value, 10);
+      if (!Number.isInteger(lawyerPartyIndex)) {
+        alert("Please select a valid party.");
+        lawyerParty.focus();
+        return;
+      }
     }
+
+    // Oath
+    const oath = document.querySelector('input[name="oath"]:checked')?.value || null;
+    if (!oath) { alert("Please choose whether you will swear or affirm."); return; }
     localStorage.setItem(LS_OATH_KEY, JSON.stringify(oath));
 
-    // 5) Save deponent info
+    // Save deponent
     const deponent = {
       first: val("deponent-first-name"),
       last:  val("deponent-last-name"),
       city:  val("deponent-city"),
       prov:  val("deponent-province"),
       role:  selectedRole,
-      roleDetail: val("role-detail")
+      roleDetail: val("role-detail") || null,
+      // officer/employee
+      roleSide,
+      rolePartyIndex,
+      // lawyer
+      lawyerSide,
+      lawyerPartyIndex
     };
 
-    // 6) Merge with existing case object from the general heading page
     const existing = JSON.parse(localStorage.getItem(LS_CASE_KEY) || "null");
     if (existing) {
       existing.deponent = deponent;
@@ -106,7 +208,7 @@ document.addEventListener("DOMContentLoaded", () => {
       localStorage.setItem(LS_CASE_KEY, JSON.stringify({ deponent }));
     }
 
-    // 7) Navigate only after all data is valid and saved
+    // Continue
     window.location.href = "affidavit-body.html";
   });
 });

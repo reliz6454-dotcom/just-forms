@@ -1,5 +1,5 @@
-/* affidavit-body.js — reorder/insert/undo with export-time exhibit labeling
-   + Word-ready General Heading preview (8-line stack) using case data
+/* affidavit-body.js — UI (heading/intro preview, paragraph editor, history, files)
+   NOTE: All export logic has been moved to affidavit-export.js
 */
 
 /* ---------- DOM helpers ---------- */
@@ -10,7 +10,6 @@ const el = (tag, props = {}) => Object.assign(document.createElement(tag), props
 const LS_CASE_KEY   = "jf_case";
 const LS_OATH_KEY   = "jf_oathType";
 const LS_PARAS_KEY  = "jf_paragraphs";
-const LS_SCHEME_KEY = "jf_exhibitScheme"; // "letters" | "numbers"
 
 /* ---------- History (Undo/Redo) ---------- */
 const MAX_HISTORY = 50;
@@ -105,13 +104,6 @@ function loadParas() {
 function saveParas(list) {
   localStorage.setItem(LS_PARAS_KEY, JSON.stringify(list));
 }
-function loadScheme() {
-  const s = localStorage.getItem(LS_SCHEME_KEY);
-  return s || "letters";
-}
-function saveScheme(s) {
-  localStorage.setItem(LS_SCHEME_KEY, s);
-}
 
 /* ---------- Utilities ---------- */
 function alpha(n) {
@@ -186,112 +178,68 @@ function removeParagraph(id) {
   saveParas(renumber(list));
 }
 
-/* ---------- Exhibit labels (computed on the fly) ---------- */
-function computeExhibitLabels(paras, scheme) {
+/* ---------- Exhibit labels (for on-screen pills only) ---------- */
+function computeExhibitLabels(paras) {
   const map = new Map();
   let idx = 1;
   paras.filter(p => !!p.exhibitFileId).forEach(p => {
-    map.set(p.id, scheme === "numbers" ? String(idx) : alpha(idx));
+    map.set(p.id, alpha(idx));
     idx++;
   });
   return map;
 }
 
-/* ---------- Exhibit scheme modal ---------- */
-function askExhibitScheme() {
-  return new Promise((resolve) => {
-    const modal  = document.getElementById("schemeModal");
-    const ok     = document.getElementById("schemeOk");
-    const cancel = document.getElementById("schemeCancel");
-    const form   = document.getElementById("schemeForm");
-
-    const close = (value) => {
-      modal.setAttribute("aria-hidden", "true");
-      ok.onclick = cancel.onclick = null;
-      resolve(value); // "letters" | "numbers" | null
-    };
-
-    modal.setAttribute("aria-hidden", "false");
-    ok.onclick = () => {
-      const chosen = new FormData(form).get("scheme") || "letters";
-      close(chosen);
-    };
-    cancel.onclick = () => close(null);
-    modal.onclick = (e) => { if (e.target === modal) close(null); };
-  });
-}
-
 /* ============================================================================
-   GENERAL HEADING HELPERS (Word-ready preview + export)
+   GENERAL HEADING HELPERS (used for preview only; export has its own copy)
    ============================================================================ */
-
-/** Return a display name for a party record. Prefer company; otherwise "First Last". */
 function partyDisplayName(p) {
   if (!p) return "";
   const company = (p.company || "").trim();
   const person  = [p.first || "", p.last || ""].map(s => s.trim()).filter(Boolean).join(" ").trim();
   return company || person || "";
 }
-
-/** Return an array of cleaned names for a side, dropping empties. */
 function collectNames(list) {
   return (Array.isArray(list) ? list : [])
     .map(partyDisplayName)
     .map(s => s.trim())
     .filter(Boolean);
 }
-
-/** "A, B, C" (<=limit) or "A, B, C, et al." (>limit). */
 function listWithEtAl(names, limit = 3) {
   if (names.length <= limit) return names.join(", ");
   return names.slice(0, limit).join(", ") + ", et al.";
 }
-
-/** Role label for a side with pluralization and motion context. */
 function roleLabelFor(side, count, isMotion, movingSide) {
   const isPlaintiff = side === "plaintiff";
   const base = isPlaintiff
     ? (count > 1 ? "Plaintiffs" : "Plaintiff")
     : (count > 1 ? "Defendants" : "Defendant");
-
   if (!isMotion) return base;
-
   const isMovingThisSide = movingSide === (isPlaintiff ? "plaintiff" : "defendant");
   const suffix = isMovingThisSide
     ? (count > 1 ? "/Moving Parties" : "/Moving Party")
     : (count > 1 ? "/Responding Parties" : "/Responding Party");
-
   return base + suffix;
 }
-
-/** CV-YY-XXXXXX-XXXX (skip missing segments gracefully). */
 function formatCourtFile(cf = {}) {
   const parts = [cf.year, cf.assign, cf.suffix].map(v => (v || "").toString().trim()).filter(Boolean);
-  if (parts.length === 0) return ""; // nothing entered
+  if (parts.length === 0) return "";
   return "CV-" + parts.join("-");
 }
-
-/** Build the 8 preview/export lines from case data. */
 function buildGeneralHeading(caseData = {}) {
   const courtName = (caseData.courtName || "ONTARIO SUPERIOR COURT OF JUSTICE").trim();
   const fileNo    = formatCourtFile(caseData.courtFile || {});
-
   const plNamesRaw = collectNames(caseData.plaintiffs || []);
   const dfNamesRaw = collectNames(caseData.defendants || []);
-
   const plNames = plNamesRaw.length
     ? listWithEtAl(plNamesRaw, 3)
     : "[Add plaintiffs in the General Heading form]";
   const dfNames = dfNamesRaw.length
     ? listWithEtAl(dfNamesRaw, 3)
     : "[Add defendants in the General Heading form]";
-
   const isMotion   = !!(caseData.motion && caseData.motion.isMotion);
   const movingSide = caseData.motion ? caseData.motion.movingSide : null;
-
   const plRole = roleLabelFor("plaintiff", plNamesRaw.length || 1, isMotion, movingSide);
   const dfRole = roleLabelFor("defendant", dfNamesRaw.length || 1, isMotion, movingSide);
-
   return {
     l1: fileNo ? `Court File No. ${fileNo}` : "Court File No.",
     l2: courtName,
@@ -304,13 +252,12 @@ function buildGeneralHeading(caseData = {}) {
   };
 }
 
-/* ---------- Render heading (8-line stack) ---------- */
+/* ---------- Render heading (preview) ---------- */
 function renderHeading() {
   const c  = loadCase();
   const gh = buildGeneralHeading(c);
   const container = $("#heading");
   if (!container) return;
-
   container.innerHTML = `
     <div class="gh">
       <div class="gh-line gh-file-no">${gh.l1}</div>
@@ -325,7 +272,7 @@ function renderHeading() {
   `;
 }
 
-/* ---------- Render intro (unchanged behavior) ---------- */
+/* ---------- Render intro (preview) ---------- */
 function renderIntro() {
   const c = loadCase();
   const d = c.deponent || {};
@@ -343,23 +290,63 @@ function renderIntro() {
   const cityPart     = d.city ? `of the City of ${d.city}` : "";
   const provincePart = d.prov ? `in the Province of ${d.prov}` : "";
   let capacityPhrase = "";
+
   switch (roleLower) {
     case "plaintiff":
     case "defendant":
       capacityPhrase = `the ${roleLower}`;
       break;
-    case "lawyer":
-      capacityPhrase = "the lawyer for a party";
+
+    case "lawyer": {
+      const side = d.lawyerSide === "plaintiff" ? "plaintiff"
+                 : d.lawyerSide === "defendant" ? "defendant" : null;
+      let companyName = "";
+      if (side && Number.isInteger(d.lawyerPartyIndex)) {
+        const list = side === "plaintiff" ? (c.plaintiffs || []) : (c.defendants || []);
+        const party = list[d.lawyerPartyIndex] || null;
+        companyName = partyDisplayName(party);
+      }
+      if (companyName) {
+        const postfix = side ? (side === "plaintiff" ? ", the plaintiff" : ", the defendant") : "";
+        if (postfix && !companyName.endsWith(postfix)) companyName += postfix;
+        capacityPhrase = `the lawyer for ${companyName}`;
+      } else {
+        capacityPhrase = "the lawyer for a party";
+      }
       break;
+    }
+
     case "officer":
-    case "employee":
-      capacityPhrase = d.roleDetail ? `the ${d.roleDetail} of a party` : `an ${roleLower} of a party`;
+    case "employee": {
+      const side = d.roleSide === "plaintiff" ? "plaintiff"
+                 : d.roleSide === "defendant" ? "defendant" : null;
+      let companyName = "";
+      if (side && Number.isInteger(d.rolePartyIndex)) {
+        const list = side === "plaintiff" ? (c.plaintiffs || []) : (c.defendants || []);
+        const party = list[d.rolePartyIndex] || null;
+        companyName = partyDisplayName(party);
+      }
+      if (companyName) {
+        const postfix = side ? (side === "plaintiff" ? ", the plaintiff" : ", the defendant") : "";
+        if (companyName && !companyName.endsWith(postfix)) companyName += postfix;
+        capacityPhrase = d.roleDetail
+          ? `the ${d.roleDetail} of ${companyName}`
+          : `an ${roleLower} of ${companyName}`;
+      } else {
+        capacityPhrase = d.roleDetail
+          ? `the ${d.roleDetail} of a party`
+          : `an ${roleLower} of a party`;
+      }
       break;
+    }
+
     default:
       capacityPhrase = d.role ? `the ${d.role}` : "";
   }
+
   const oathText = oath === "swear" ? "MAKE OATH AND SAY:" : "AFFIRM:";
-  const parts = [fullName ? `I, <strong>${fullName}</strong>` : "I,", cityPart, provincePart, capacityPhrase || null].filter(Boolean);
+  const parts = [fullName ? `I, <strong>${fullName}</strong>` : "I,", cityPart, provincePart, capacityPhrase || null]
+    .filter(Boolean);
 
   const intro = $("#intro");
   if (!intro) return;
@@ -374,7 +361,7 @@ const paraList = $("#paraList");
 
 function renderParagraphs() {
   const list = loadParas().sort(byNumber);
-  const labels = computeExhibitLabels(list, "letters"); // UI default = letters
+  const labels = computeExhibitLabels(list); // letters on-screen
   paraList.innerHTML = "";
   list.forEach(p => paraList.appendChild(renderRow(p, list.length, labels)));
 }
@@ -475,84 +462,7 @@ function renderRow(p, totalCount, labels) {
   return row;
 }
 
-/* ---------- Export (TXT) ---------- */
-function buildAffidavitText() {
-  const c   = loadCase();
-  const d   = c.deponent || {};
-  const cf  = c.courtFile || {};
-  const oath = (loadOath() || "").toLowerCase();
-
-  const paras  = loadParas().sort(byNumber);
-  const scheme = loadScheme();
-  const labels = computeExhibitLabels(paras, scheme);
-
-  // Use the same general heading builder as the preview
-  const gh = buildGeneralHeading(c);
-
-  const lines = [];
-  lines.push(gh.l1);
-  lines.push(gh.l2);
-  lines.push(gh.l3);
-  lines.push(gh.l4);
-  lines.push(gh.l5);
-  lines.push(gh.l6);
-  lines.push(gh.l7);
-  lines.push(gh.l8);
-  lines.push(""); // blank line before the affidavit title
-
-  // Title: "Affidavit of ..."
-  const nameOf = (person) => [person?.first, person?.last].filter(Boolean).join(" ").trim();
-  const roleLower = (d.role || "").toLowerCase();
-  let title = nameOf(d);
-  if (!title) {
-    if (roleLower === "plaintiff" && Array.isArray(c.plaintiffs) && c.plaintiffs[0]) title = nameOf(c.plaintiffs[0]);
-    if (roleLower === "defendant" && Array.isArray(c.defendants) && c.defendants[0]) title = nameOf(c.defendants[0]);
-  }
-  lines.push(`Affidavit of ${title || ""}`);
-  lines.push("");
-
-  const cityPart     = d.city ? `of the City of ${d.city}` : "";
-  const provincePart = d.prov ? `in the Province of ${d.prov}` : "";
-  let capacityPhrase = "";
-  switch (roleLower) {
-    case "plaintiff":
-    case "defendant":
-      capacityPhrase = `the ${roleLower}`;
-      break;
-    case "lawyer":
-      capacityPhrase = "the lawyer for a party";
-      break;
-    case "officer":
-    case "employee":
-      capacityPhrase = d.roleDetail ? `the ${d.roleDetail} of a party` : `an ${roleLower} of a party`;
-      break;
-    default:
-      capacityPhrase = d.role ? `the ${d.role}` : "";
-  }
-  const oathText = oath === "swear" ? "MAKE OATH AND SAY:" : "AFFIRM:";
-  const opening = [title ? `I, ${title}` : "I,", cityPart, provincePart, capacityPhrase || null].filter(Boolean).join(", ");
-  lines.push(`${opening}, ${oathText}`);
-  lines.push("");
-
-  // Numbered paragraphs with inline exhibit refs
-  paras.forEach(p => {
-    const label = p.exhibitFileId ? labels.get(p.id) : null;
-    const suffix = label ? ` (Exhibit ${label})` : "";
-    lines.push(`${p.number}. ${p.text || ""}${suffix}`);
-  });
-
-  return lines.join("\n");
-}
-
-function download(name, blobText) {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([blobText], { type: "text/plain" }));
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
-}
-
-/* ---------- Init ---------- */
+/* ---------- Init (no export wiring here) ---------- */
 document.addEventListener("DOMContentLoaded", () => {
   // Back
   $("#back").onclick = () => history.back();
@@ -562,26 +472,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (undoBtn) undoBtn.onclick = () => undo();
   if (redoBtn) redoBtn.onclick = () => redo();
 
-  // Export (TXT)
-  $("#exportTxt").onclick = () => {
-    const txt = buildAffidavitText();
-    download("Affidavit.txt", txt);
-  };
-
-  // Export (Combined PDF) — ask user for exhibit scheme at click time (stub)
-  $("#exportPdf").onclick = async () => {
-    const scheme = await askExhibitScheme(); // "letters" | "numbers" | null
-    if (!scheme) return; // user cancelled
-    const paras = loadParas().sort(byNumber);
-    const labels = computeExhibitLabels(paras, scheme);
-    // Stub notice; replace with real merge using labels
-    alert(
-      `Export will use ${scheme === "letters" ? "Letters (A, B, C…)" : "Numbers (1, 2, 3…)"} for exhibits.\n\n` +
-      "(Stub: implement PDF merge here using the computed labels.)"
-    );
-  };
-
-  // Render heading + intro
+  // Render heading + intro previews
   renderHeading();
   renderIntro();
 

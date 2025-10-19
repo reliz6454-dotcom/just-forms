@@ -167,6 +167,38 @@
           </div>
         </template>
       </fieldset>
+          <!-- Motion Context -->
+      <fieldset id="motion-context">
+        <legend>Motion Context</legend>
+
+        <p class="form-instruction">
+          Will this general heading be used for a motion?
+        </p>
+
+        <div role="radiogroup" aria-labelledby="motion-q">
+          <span id="motion-q" class="visually-hidden">Motion?</span>
+          <label>
+            <input type="radio" id="motion-no" name="is-motion" value="no" checked>
+            No
+          </label>
+          <label class="ml-6">
+            <input type="radio" id="motion-yes" name="is-motion" value="yes">
+            Yes
+          </label>
+        </div>
+
+        <div id="motion-fields" hidden style="margin-top:8px">
+          <p class="form-instruction">Which side is the <strong>Moving Party</strong>?</p>
+          <label>
+            <input type="radio" id="moving-plaintiff" name="moving-side" value="plaintiff">
+            Plaintiff(s)
+          </label>
+          <label class="ml-6">
+            <input type="radio" id="moving-defendant" name="moving-side" value="defendant">
+            Defendant(s)
+          </label>
+        </div>
+      </fieldset>
 
       <button type="submit">Submit</button>
     </form>

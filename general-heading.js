@@ -8,6 +8,12 @@ const LS_CASE_KEY = "jf_case";
 const val = (id) => (document.getElementById(id)?.value || "").trim();
 
 /* ---------------------------
+   Tiny UI helpers (new)
+----------------------------*/
+function show(el, yes) { if (!el) return; el.hidden = !yes; el.setAttribute("aria-hidden", yes ? "false" : "true"); }
+function radioChecked(id){ const n=document.getElementById(id); return !!(n && n.checked); }
+
+/* ---------------------------
    Party readers (ordered)
 ----------------------------*/
 
@@ -93,6 +99,47 @@ document.addEventListener("DOMContentLoaded", () => {
   const form = document.querySelector("form");
   if (!form) return;
 
+  /* --- Motion UI wiring (new) --- */
+  const motionYes = document.getElementById("motion-yes");
+  const motionNo  = document.getElementById("motion-no");
+  const motionBox = document.getElementById("motion-fields");
+
+  function syncMotionUI(){
+    const isYes = radioChecked("motion-yes");
+    show(motionBox, isYes);
+    if (!isYes) {
+      // Clear any moving-side choice if user flipped back to No
+      const mp = document.getElementById("moving-plaintiff");
+      const md = document.getElementById("moving-defendant");
+      if (mp) mp.checked = false;
+      if (md) md.checked = false;
+    }
+  }
+  [motionYes, motionNo].forEach(r => r && r.addEventListener("change", syncMotionUI));
+  syncMotionUI();
+
+  // Prefill from storage if present (optional but nice)
+  (function initMotionFromStorage(){
+    try {
+      const existing = JSON.parse(localStorage.getItem(LS_CASE_KEY) || "null");
+      const m = existing?.motion;
+      if (!m) return;
+      if (m.isMotion) {
+        if (motionYes) motionYes.checked = true;
+        if (motionNo)  motionNo.checked = false;
+        const mp = document.getElementById("moving-plaintiff");
+        const md = document.getElementById("moving-defendant");
+        if (m.movingSide === "plaintiff" && mp) mp.checked = true;
+        if (m.movingSide === "defendant" && md) md.checked = true;
+      } else {
+        if (motionNo) motionNo.checked = true;
+        if (motionYes) motionYes.checked = false;
+      }
+      syncMotionUI();
+    } catch {}
+  })();
+  /* --- end Motion UI wiring --- */
+
   form.addEventListener("submit", (e) => {
     e.preventDefault();
 
@@ -143,12 +190,29 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!proceed) return;
     }
 
+    /* --- Motion context (new) --- */
+    const isMotion = radioChecked("motion-yes");
+    let movingSide = null;
+
+    if (isMotion) {
+      const mp = radioChecked("moving-plaintiff");
+      const md = radioChecked("moving-defendant");
+      if (!mp && !md) {
+        alert("Please select which side is the Moving Party.");
+        document.getElementById("moving-plaintiff")?.focus();
+        return;
+      }
+      movingSide = mp ? "plaintiff" : "defendant";
+    }
+    /* --- end Motion context --- */
+
     // Build and save case object
     const caseData = {
       courtName,
       courtFile: { year, assign, suffix },
       plaintiffs,   // [{first,last,company}, ...] in entered order
       defendants,   // [{first,last,company}, ...] in entered order
+      motion: { isMotion, movingSide } // <-- NEW
     };
 
     try {

@@ -372,18 +372,35 @@ function renderRow(p, totalCount, labels) {
     ? (labels.get(p.id) ? `Exhibit ${labels.get(p.id)}` : "Exhibit")
     : "No exhibit";
 
+  // UPDATED: static number badge + clearly labeled move control
   row.innerHTML = `
     <div class="row-num">
-      <label>No.</label>
       <div class="para-num-row">
-        <div class="num-controls">
-          <input type="number" class="num" min="1" step="1" value="${p.number}">
-          <button type="button" class="applyReorder">Apply</button>
+        <!-- Inline No. + current number -->
+        <label class="no-inline"> Para No. <span class="pill"># ${p.number}</span></label>
+
+        <!-- Move control on one line with compact input -->
+        <div class="move-controls">
+          <label for="move-${p.id}">Move to Para No.:</label>
+          <div class="num-controls">
+            <input
+              type="number"
+              id="move-${p.id}"
+              class="num"
+              min="1"
+              max="${totalCount}"
+              step="1"
+              value="${p.number}"
+            >
+            <button type="button" class="applyReorder">Apply</button>
+          </div>
         </div>
+
         <button type="button" class="del">Remove paragraph</button>
         <button type="button" class="insBelow">Insert new paragraph below</button>
       </div>
     </div>
+
     <div class="row-text">
       <label>Paragraph text</label>
       <textarea class="txt" placeholder="Type the paragraph…">${p.text || ""}</textarea>
@@ -392,12 +409,15 @@ function renderRow(p, totalCount, labels) {
         <span class="fileName ml-6"></span>
       </div>
     </div>
+
     <div class="row-file">
       <label>Attach PDF (optional)</label>
       <input type="file" class="file" accept="application/pdf">
     </div>
   `;
 
+
+  // DOM refs (unchanged)
   const num = $(".num", row);
   const txt = $(".txt", row);
   const file = $(".file", row);
@@ -406,6 +426,7 @@ function renderRow(p, totalCount, labels) {
   const name = $(".fileName", row);
   const applyReorder = $(".applyReorder", row);
 
+  // Helpers (unchanged)
   const desiredNumber = () => {
     let n = Math.round(Number(num.value));
     if (!Number.isFinite(n) || n < 1) n = 1;
@@ -419,6 +440,7 @@ function renderRow(p, totalCount, labels) {
   syncButtonState();
   num.addEventListener("input", syncButtonState);
 
+  // Actions (unchanged)
   applyReorder.onclick = () => {
     const n = desiredNumber();
     if (n !== p.number) {
@@ -426,19 +448,23 @@ function renderRow(p, totalCount, labels) {
       renderParagraphs();
     }
   };
+
   del.onclick = () => {
     if (confirm("Remove this paragraph?")) {
       removeParagraph(p.id);
       renderParagraphs();
     }
   };
+
   insBelow.onclick = () => {
     insertNewBelow(p.number);
     renderParagraphs();
   };
+
   txt.oninput = () => {
     upsertParagraph({ id: p.id, text: txt.value });
   };
+
   file.onchange = async () => {
     const f = file.files?.[0];
     if (!f) return;
@@ -487,15 +513,7 @@ document.addEventListener("DOMContentLoaded", () => {
     addParagraph();
     renderParagraphs();
   };
-  const insertAt = $("#insertAt");
-  $("#addParaAt").onclick = () => {
-    const len = loadParas().length;
-    let n = Math.round(Number(insertAt.value));
-    if (!Number.isFinite(n) || n < 1) n = 1;
-    if (n > len + 1) n = len + 1; // allow inserting at end via N+1
-    insertNewAt(n);
-    renderParagraphs();
-  };
+
 
   // History baseline + button states
   if (UNDO_STACK.length === 0) UNDO_STACK.push(snapshotParas());

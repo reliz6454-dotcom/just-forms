@@ -1,4 +1,13 @@
-<!-- affidavit-body.html -->
+<!--
+  affidavit-body.html — Paragraph editor + previews + export actions
+  ---------------------------------------------------------------------------
+  Purpose:
+    • Shows a live preview of the General Heading and Intro (read from storage).
+    • Lets the user add/reorder/remove numbered affidavit paragraphs.
+    • Supports optional PDF exhibits per paragraph (stored in IndexedDB).
+    • Provides Export buttons (TXT works; PDF is a stub in affidavit-export.js).
+-->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,47 +18,57 @@
 <body>
   <main>
     <section>
+      <!-- Top toolbar -->
       <div class="toolbar">
         <button id="back">◀ Back</button>
         <div>
-          <label class="scheme-control">
-          </label>
           <button id="exportTxt">Export Affidavit (TXT)</button>
           <button id="exportPdf">Export Combined (PDF – stub)</button>
         </div>
       </div>
 
+      <!-- Live previews -->
       <div class="card" id="heading"></div>
       <div class="card" id="intro"></div>
 
+      <!-- Affidavit Body Editor -->
       <div class="card">
         <h1>Affidavit Body</h1>
         <p class="muted">
           Add paragraphs. Use <strong>“Move to paragraph”</strong> to change their order; exhibits relabel automatically (A, B, C…).
         </p>
 
-<div class="controls" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
-  <button id="addParaEnd">+ Add paragraph</button>
-  <div style="display:flex;gap:8px;align-items:center;">
-    <button id="undoBtn" disabled>Undo last action</button>
-    <button id="redoBtn" disabled>Redo last undo</button>
-  </div>
-</div>
+        <!-- Controls toolbar -->
+        <div class="controls">
+          <button id="addParaEnd">+ Add paragraph</button>
 
+          <div class="controls-right">
+            <button id="undoBtn" disabled>Undo last action</button>
+            <button id="redoBtn" disabled>Redo last undo</button>
 
+            <!-- Exhibit Label Scheme Toggle -->
+            <div class="scheme-control" id="schemeControl" title="Toggle exhibit label style">
+              <span class="scheme-label">Exhibit labels:</span>
+              <label class="switch">
+                <input type="checkbox" id="schemeToggle" aria-label="Toggle exhibit labels letters/numbers">
+                <span class="slider"></span>
+              </label>
+              <span class="scheme-option" id="schemeText">Letters</span>
+            </div>
+          </div>
+        </div>
 
+        <!-- Paragraph rows -->
         <div id="paraList"></div>
       </div>
     </section>
   </main>
 
-  <!-- Main affidavit body logic -->
-  <script src="affidavit-body.js"></script>
+  <!-- JS modules -->
+  <script type="module" src="affidavit-body.js"></script>
+  <script type="module" src="affidavit-export.js"></script>
 
-  <!-- Export logic (TXT + future DOC/PDF) -->
-  <script src="affidavit-export.js"></script>
-
-  <!-- Exhibit scheme modal -->
+  <!-- Exhibit Scheme Modal -->
   <div id="schemeModal" class="modal" aria-hidden="true">
     <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="schemeTitle">
       <h3 id="schemeTitle">Exhibit label style</h3>

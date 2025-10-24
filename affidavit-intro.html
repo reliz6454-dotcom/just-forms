@@ -1,3 +1,15 @@
+<!--
+  affidavit-intro.html — Deponent Introductory Clause Inputs
+  ---------------------------------------------------------------------------
+  Purpose:
+    • Collect deponent identity/location + capacity (party, officer/employee, or lawyer) and oath type.
+    • Persists data in localStorage (keys: "jf_case" and "jf_oathType") for use on the next page.
+    • On submit → navigates to affidavit-body.html (wired by affidavit-intro.js).
+
+  Behavior:
+    • Conditional sections (role detail, affiliation, and lawyer selection) are toggled by affidavit-intro.js.
+    • Party <select> options are populated from jf_case.plaintiffs/defendants captured on index.html.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,6 +27,7 @@
         The information you enter here will be used to complete that introductory clause. Please provide the following details:
       </p>
 
+      <!-- Form is validated and stored by affidavit-intro.js -->
       <form>
         <!-- Your Name and Location -->
         <fieldset>
@@ -36,78 +49,81 @@
           <input type="text" id="deponent-province" name="deponent-province" placeholder="e.g. Ontario">
         </fieldset>
 
+        <!-- Role selection drives conditional UI below (officer/employee vs lawyer) -->
         <fieldset>
-  <legend>My Role in this Case</legend>
+          <legend>My Role in this Case</legend>
 
-  <input type="radio" id="role-plaintiff" name="role" value="plaintiff" required>
-  <label for="role-plaintiff">I am the Plaintiff (the person bringing the case)</label>
-  <br>
+          <input type="radio" id="role-plaintiff" name="role" value="plaintiff" required>
+          <label for="role-plaintiff">I am the Plaintiff (the person bringing the case)</label>
+          <br>
 
-  <input type="radio" id="role-defendant" name="role" value="defendant">
-  <label for="role-defendant">I am the Defendant (the person responding to the case)</label>
-  <br>
+          <input type="radio" id="role-defendant" name="role" value="defendant">
+          <label for="role-defendant">I am the Defendant (the person responding to the case)</label>
+          <br>
 
-  <input type="radio" id="role-lawyer" name="role" value="lawyer">
-  <label for="role-lawyer">I am the Lawyer for a party</label>
-  <br>
+          <input type="radio" id="role-lawyer" name="role" value="lawyer">
+          <label for="role-lawyer">I am the Lawyer for a party</label>
+          <br>
 
-  <input type="radio" id="role-officer" name="role" value="officer">
-  <label for="role-officer">I am a Director/Officer of a company involved in the case</label>
-  <br>
+          <input type="radio" id="role-officer" name="role" value="officer">
+          <label for="role-officer">I am a Director/Officer of a company involved in the case</label>
+          <br>
 
-  <input type="radio" id="role-employee" name="role" value="employee">
-  <label for="role-employee">I am an Employee of a company involved in the case</label>
+          <input type="radio" id="role-employee" name="role" value="employee">
+          <label for="role-employee">I am an Employee of a company involved in the case</label>
 
-  <!-- Role/title text field (only for officer/employee) -->
-  <div id="role-detail-box" style="display:none; margin-top:8px">
-    <label for="role-detail">If officer or employee, state your role/title:</label>
-    <input type="text" id="role-detail" name="role-detail" placeholder="e.g. Vice President of Sales">
-  </div>
+          <!-- Role/title text field (only for officer/employee; required when visible) -->
+          <div id="role-detail-box" style="display:none; margin-top:8px">
+            <label for="role-detail">If officer or employee, state your role/title:</label>
+            <input type="text" id="role-detail" name="role-detail" placeholder="e.g. Vice President of Sales">
+          </div>
 
-  <!-- Officer/Employee affiliation (side + party) -->
-  <div id="affiliation-box" style="display:none; margin-top:12px">
-    <p class="form-instruction">Select which party you are an officer/employee of.</p>
+          <!-- Officer/Employee affiliation (choose side, then specific party; required when visible) -->
+          <div id="affiliation-box" style="display:none; margin-top:12px">
+            <p class="form-instruction">Select which party you are an officer/employee of.</p>
 
-    <label>
-      <input type="radio" name="aff-side" id="aff-side-plaintiff" value="plaintiff">
-      Plaintiff(s)
-    </label>
-    <label class="ml-6">
-      <input type="radio" name="aff-side" id="aff-side-defendant" value="defendant">
-      Defendant(s)
-    </label>
+            <label>
+              <input type="radio" name="aff-side" id="aff-side-plaintiff" value="plaintiff">
+              Plaintiff(s)
+            </label>
+            <label class="ml-6">
+              <input type="radio" name="aff-side" id="aff-side-defendant" value="defendant">
+              Defendant(s)
+            </label>
 
-    <div class="mt-12">
-      <label for="affiliation-party">Party:</label>
-      <select id="affiliation-party" name="affiliation-party">
-        <option value="">— Select party —</option>
-      </select>
-    </div>
-  </div>
+            <div class="mt-12">
+              <label for="affiliation-party">Party:</label>
+              <!-- Options populated from jf_case.[plaintiffs|defendants] by affidavit-intro.js -->
+              <select id="affiliation-party" name="affiliation-party">
+                <option value="">— Select party —</option>
+              </select>
+            </div>
+          </div>
 
-  <!-- Lawyer affiliation (side + party) -->
-  <div id="lawyer-box" style="display:none; margin-top:12px">
-    <p class="form-instruction">Select which party you are the lawyer for.</p>
+          <!-- Lawyer affiliation (choose side, then specific party; required when visible) -->
+          <div id="lawyer-box" style="display:none; margin-top:12px">
+            <p class="form-instruction">Select which party you are the lawyer for.</p>
 
-    <label>
-      <input type="radio" name="law-side" id="law-side-plaintiff" value="plaintiff">
-      Plaintiff(s)
-    </label>
-    <label class="ml-6">
-      <input type="radio" name="law-side" id="law-side-defendant" value="defendant">
-      Defendant(s)
-    </label>
+            <label>
+              <input type="radio" name="law-side" id="law-side-plaintiff" value="plaintiff">
+              Plaintiff(s)
+            </label>
+            <label class="ml-6">
+              <input type="radio" name="law-side" id="law-side-defendant" value="defendant">
+              Defendant(s)
+            </label>
 
-    <div class="mt-12">
-      <label for="lawyer-party">Party:</label>
-      <select id="lawyer-party" name="lawyer-party">
-        <option value="">— Select party —</option>
-      </select>
-    </div>
-  </div>
-</fieldset>
+            <div class="mt-12">
+              <label for="lawyer-party">Party:</label>
+              <!-- Options populated from jf_case.[plaintiffs|defendants] by affidavit-intro.js -->
+              <select id="lawyer-party" name="lawyer-party">
+                <option value="">— Select party —</option>
+              </select>
+            </div>
+          </div>
+        </fieldset>
 
-        <!-- Oath / Affirmation -->
+        <!-- Oath / Affirmation selection (saved to "jf_oathType") -->
         <p>
           Ontario affidavits require you to choose either an oath or an affirmation. Swearing an oath is a religious
           form; affirming is a non-religious form. Both have the same legal effect.
@@ -128,6 +144,7 @@
     </section>
   </main>
 
+  <!-- Wires conditional UI, validation, storage, and navigation to the next step -->
   <script src="affidavit-intro.js"></script>
 </body>
 </html>

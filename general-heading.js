@@ -178,17 +178,16 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Soft warning if a row mixes person + company (allowed, but likely a mistake)
-    const mixedPl = findMixedEntries(plaintiffs);
-    const mixedDf = findMixedEntries(defendants);
-    if (mixedPl !== -1 || mixedDf !== -1) {
-      const proceed = confirm(
-        "It looks like one or more entries include BOTH a person's name and a Company Legal Name.\n\n" +
-        "Usually you should fill EITHER the person fields OR the company field for each party.\n\n" +
-        "Click OK to continue anyway, or Cancel to review."
-      );
-      if (!proceed) return;
-    }
+const mixedPl = findMixedEntries(plaintiffs);
+const mixedDf = findMixedEntries(defendants);
+if (mixedPl !== -1 || mixedDf !== -1) {
+  alert(
+    "For each party, fill EITHER the person's First + Last name OR the Company Legal Name — not both.\n\n" +
+    "Tip for sole proprietors: use “John Doe, carrying on business as Doe Painting” in the person fields (leave Company empty)."
+  );
+  return;
+}
+
 
     /* --- Motion context (new) --- */
     const isMotion = radioChecked("motion-yes");

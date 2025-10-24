@@ -1,3 +1,20 @@
+<!--
+  index.html — General Heading Information Form
+  ---------------------------------------------------------------------------
+  Purpose:
+    • Collect court + party info used to build the General Heading that appears on every filing.
+    • Persist values in localStorage via general-heading.js (LS key "jf_case").
+    • On valid submit → navigates to affidavit-intro.html for deponent details.
+
+  Key dependencies:
+    • style.css for layout.
+    • general-heading.js wires dynamic add/remove for parties and handles submit/storage.
+
+  Notes:
+    • Court File Number accepts 3 segments (year/assigned/suffix) to match "CV-XX-XXXXXX-XXXX".
+    • Plaintiff/Defendant sections support individuals OR companies (keep one or the other per row).
+    • Motion Context is optional; exposed when "Yes" is selected.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -13,11 +30,13 @@
       In Ontario, all court documents begin with a <strong>general heading</strong>. This heading identifies the court, the file number, and the parties involved. Once created it will apply to all documents in your case, including affidavits. Please provide the following information:
     </p>
 
+    <!-- Form is validated/enhanced and stored by general-heading.js -->
     <form id="general-heading-form">
       <!-- Court Information -->
       <fieldset>
         <legend>Court Information</legend>
 
+        <!-- Court File No. broken into segments to reduce input errors -->
         <label for="court-file-year">Court File Number: CV -</label>
         <input type="text" id="court-file-year" name="courtfile-number-year" maxlength="2" size="2"> -
         <input type="text" id="court-file-assigned" name="courtfile-number-assigned" maxlength="6" size="6"> -
@@ -33,6 +52,7 @@
       <fieldset id="plaintiff-information">
         <legend>Plaintiff(s) Information</legend>
 
+        <!-- Guidance for individuals vs companies -->
         <p class="form-instruction">
           Enter the first plaintiff (the first name listed on your Statement of Claim or Notice of Application).
         </p>
@@ -40,7 +60,7 @@
           If the plaintiff is an individual, use First and Last Name. If it is a company, leave the person fields blank and enter the full legal company name.
         </p>
 
-        <!-- First plaintiff (always visible) -->
+        <!-- First plaintiff (always visible; extras cloned from template below) -->
         <div class="party-block party-first" data-index="1">
           <div class="name-row">
             <div>
@@ -61,14 +81,15 @@
           </div>
 
           <div class="party-actions">
+            <!-- First row: only an "add" button; remove is on subsequent rows -->
             <button type="button" id="add-plaintiff-initial" class="add-party-btn">+ Add another plaintiff</button>
           </div>
         </div>
 
-        <!-- Added plaintiffs appear here -->
+        <!-- Added plaintiffs appear here (managed by general-heading.js) -->
         <div id="extra-plaintiffs" class="party-list"></div>
 
-        <!-- Template for additional plaintiffs -->
+        <!-- Template for additional plaintiffs (cloned by general-heading.js) -->
         <template id="plaintiff-row-template">
           <div class="party-block" data-index="">
             <div class="name-row">
@@ -167,7 +188,7 @@
           </div>
         </template>
       </fieldset>
-          <!-- Motion Context -->
+          <!-- Motion Context (optional UI revealed by radio selection) -->
       <fieldset id="motion-context">
         <legend>Motion Context</legend>
 
@@ -187,6 +208,7 @@
           </label>
         </div>
 
+        <!-- Shown when "Yes" is selected; choice persisted inside jf_case.motion -->
         <div id="motion-fields" hidden style="margin-top:8px">
           <p class="form-instruction">Which side is the <strong>Moving Party</strong>?</p>
           <label>
@@ -205,6 +227,7 @@
   </section>
 </main>
 
+<!-- Wires up dynamic rows, validation, storage, and navigation to next step -->
 <script src="general-heading.js"></script>
 </body>
 </html>

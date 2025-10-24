@@ -1,4 +1,15 @@
 // affidavit-intro.js — deponent + conditional affiliation (officer/employee OR lawyer)
+// -----------------------------------------------------------------------------
+// PURPOSE
+//   • Reads/validates deponent identity, role, affiliation side/party, and oath.
+//   • Persists data to localStorage under:
+//       - LS_CASE_KEY ("jf_case") → merged with .deponent
+//       - LS_OATH_KEY ("jf_oathType") → "swear" | "affirm"
+//   • Navigates to affidavit-body.html after successful submit.
+// UX
+//   • Shows/hides Officer/Employee and Lawyer blocks based on selected role.
+//   • Populates party <select> options from jf_case.plaintiffs / jf_case.defendants.
+// -----------------------------------------------------------------------------
 
 // --- Keys ---
 const LS_CASE_KEY = "jf_case";
@@ -6,16 +17,28 @@ const LS_OATH_KEY = "jf_oathType";
 
 // --- Helpers ---
 const val = (id) => (document.getElementById(id)?.value || "").trim();
+
 function loadCase() {
   try { return JSON.parse(localStorage.getItem(LS_CASE_KEY) || "{}"); }
   catch { return {}; }
 }
+
+/**
+ * Return a human-friendly display name for a party object.
+ * Prefer company name; otherwise join first + last.
+ */
 function partyDisplayName(p) {
   if (!p) return "";
   const company = (p.company || "").trim();
   const person = [p.first || "", p.last || ""].map(s => s.trim()).filter(Boolean).join(" ").trim();
   return company || person || "";
 }
+
+/**
+ * Populate a <select> with parties from either the plaintiffs or defendants list.
+ * @param {HTMLSelectElement} selectEl - target <select>
+ * @param {"plaintiff"|"defendant"} side - which list to use
+ */
 function populatePartySelect(selectEl, side) {
   const data = loadCase() || {};
   const list = Array.isArray(side === "plaintiff" ? data.plaintiffs : data.defendants)
@@ -34,7 +57,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const form = document.querySelector("form");
   if (!form) return;
 
-  // Inputs
+  // Inputs (identity/location)
   const first = document.getElementById("deponent-first-name");
   const last  = document.getElementById("deponent-last-name");
   const city  = document.getElementById("deponent-city");
@@ -58,7 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const lawSideDf   = document.getElementById("law-side-defendant");
   const lawyerParty = document.getElementById("lawyer-party");
 
-  // Require basic person + location fields
+  // Require person + location fields (lets browser do native validation)
   [first, last, city, prov].forEach(i => i && i.setAttribute("required", ""));
   if (!roleRadios.some(r => r.hasAttribute("required"))) {
     roleRadios[0]?.setAttribute("required", "");
@@ -67,7 +90,8 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("swear")?.setAttribute("required", "");
   }
 
-  // Show/hide + conditional required
+  // Toggle conditional UI blocks based on selected role.
+  // Also manages required attributes when blocks are visible.
   function updateRoleUI() {
     const selected = document.querySelector('input[name="role"]:checked')?.value || "";
 
@@ -85,7 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
       roleDetail.removeAttribute("required");
       roleDetail.setCustomValidity("");
       affiliationParty.removeAttribute("required");
-      // clear choices
+      // Clear choices when hiding
       if (affSidePl) affSidePl.checked = false;
       if (affSideDf) affSideDf.checked = false;
       affiliationParty.innerHTML = '<option value="">— Select party —</option>';
@@ -104,19 +128,21 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   roleRadios.forEach(r => r.addEventListener("change", updateRoleUI));
-  updateRoleUI();
+  updateRoleUI(); // initialize on load
 
-  // Populate selects when a side gets chosen
+  // Populate selects when a side gets chosen (Officer/Employee)
   [affSidePl, affSideDf].forEach(r => r && r.addEventListener("change", () => {
     const side = affSidePl?.checked ? "plaintiff" : (affSideDf?.checked ? "defendant" : "");
     if (side) populatePartySelect(affiliationParty, side);
   }));
+
+  // Populate selects when a side gets chosen (Lawyer)
   [lawSidePl, lawSideDf].forEach(r => r && r.addEventListener("change", () => {
     const side = lawSidePl?.checked ? "plaintiff" : (lawSideDf?.checked ? "defendant" : "");
     if (side) populatePartySelect(lawyerParty, side);
   }));
 
-  // Submit
+  // Submit handler: validate, persist, navigate
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     if (!form.reportValidity()) return;
@@ -125,7 +151,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const isOfficerOrEmployee = selectedRole === "officer" || selectedRole === "employee";
     const isLawyer = selectedRole === "lawyer";
 
-    // Officer/Employee validation
+    // Officer/Employee validation and capture
     let roleSide = null;
     let rolePartyIndex = null;
     if (isOfficerOrEmployee) {
@@ -156,7 +182,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    // Lawyer validation
+    // Lawyer validation and capture
     let lawyerSide = null;
     let lawyerPartyIndex = null;
     if (isLawyer) {
@@ -179,12 +205,12 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    // Oath
+    // Oath (persist as a simple string)
     const oath = document.querySelector('input[name="oath"]:checked')?.value || null;
     if (!oath) { alert("Please choose whether you will swear or affirm."); return; }
     localStorage.setItem(LS_OATH_KEY, JSON.stringify(oath));
 
-    // Save deponent
+    // Save deponent in jf_case (merging with any existing case data)
     const deponent = {
       first: val("deponent-first-name"),
       last:  val("deponent-last-name"),
@@ -208,7 +234,7 @@ document.addEventListener("DOMContentLoaded", () => {
       localStorage.setItem(LS_CASE_KEY, JSON.stringify({ deponent }));
     }
 
-    // Continue
+    // Continue to body page
     window.location.href = "affidavit-body.html";
   });
 });

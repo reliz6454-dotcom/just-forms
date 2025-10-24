@@ -1,15 +1,27 @@
+/* 
+  style.css — Global styles for forms, party blocks, affidavit editor, and previews
+  ------------------------------------------------------------------------------
+  Purpose:
+    • Provide consistent typography and layout for all pages.
+    • Style dynamic party rows, controls, and affidavit body editor.
+    • Include a Word-like preview style for the General Heading block.
+*/
+
+/* ===== Headings ===== */
 h1 {
   color: black;
   background: linear-gradient(to right, #20d38c, #1c69ed, #8a32cd, #de0e98);
-  -webkit-background-clip: text;   /* Chrome, Safari, Edge */
-  -webkit-text-fill-color: transparent; /* Chrome, Safari, Edge */
-  background-clip: text;           /* Firefox */
+  -webkit-background-clip: text;            /* Chrome, Safari, Edge */
+  -webkit-text-fill-color: transparent;     /* Chrome, Safari, Edge */
+  background-clip: text;                    /* Firefox */
   color: transparent;
   font-size: 30px;
 }
 
+/* Basic form fieldset width constraint (desktop-friendly) */
 fieldset { width: 600px; }
 
+/* Role detail box is toggled via JS; default hidden */
 #role-detail-box {
   display: none;
   margin-top: 8px;
@@ -17,6 +29,7 @@ fieldset { width: 600px; }
 
 /* ===== Party form (Plaintiff / Defendant) unified styling ===== */
 
+/* Card-like block around each party input set */
 .party-block {
   border: 1px solid #e5e5e5;
   border-radius: 8px;
@@ -24,14 +37,14 @@ fieldset { width: 600px; }
   background: #fff;
 }
 
-/* Layout for added rows */
+/* Container for dynamically added rows (grid for clean vertical spacing) */
 .party-list {
   display: grid;
   gap: 12px;
   max-width: 700px;
 }
 
-/* “– OR –” separator (now left-aligned) */
+/* “– OR –” separator between person vs company inputs */
 .or-separator {
   text-align: left;
   font-weight: 600;
@@ -40,7 +53,7 @@ fieldset { width: 600px; }
   letter-spacing: 1px;
 }
 
-/* Actions under each party block */
+/* Row-level action buttons (add/remove) aligned to the right */
 .party-actions {
   display: flex;
   gap: 8px;
@@ -48,7 +61,7 @@ fieldset { width: 600px; }
   margin-top: 8px;
 }
 
-/* All form buttons: plain, minimal, uniform */
+/* Uniform button styling across the app */
 button,
 .add-party-btn,
 .remove-party-btn {
@@ -73,13 +86,13 @@ button:disabled,
   cursor: not-allowed;
 }
 
-/* Two inputs side by side using flexbox (no grid) */
+/* Two inputs side by side using flexbox (no CSS grid dependency) */
 .name-row {
   display: flex;
   gap: 12px; /* space between First and Last columns */
 }
 
-/* Each column: label left, input right */
+/* Optional cell wrapper for label+input alignment (kept for compatibility) */
 .name-row .cell {
   display: flex;
   align-items: center;
@@ -100,7 +113,7 @@ button:disabled,
   border-radius: 6px;
 }
 
-/* Mobile: stack vertically */
+/* Mobile fallback: stack name fields vertically */
 @media (max-width: 600px) {
   .name-row { flex-direction: column; }
   .name-row .cell label { width: auto; }
@@ -118,19 +131,22 @@ button:disabled,
   white-space: nowrap;
 }
 
-/* Utilities */
+/* Spacing utilities (used by markup/JS) */
 .mt-6  { margin-top: .5rem; }
 .mt-12 { margin-top: .75rem; }  /* used for the intro <p> */
 .ml-6  { margin-left: .5rem; }
 
 /* ===== Affidavit body page layout ===== */
 
+/* Generic card container used by previews and editor */
 .card {
   border: 1px solid #e5e5e5;
   border-radius: 12px;
   padding: 14px;
   margin: 14px 0;
 }
+
+/* (Reserved) “Style of cause” layout for future use */
 .style-of-cause {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -140,7 +156,7 @@ button:disabled,
 .vs { text-align: center; font-weight: 700; }
 .muted { color: #666; }
 
-/* Paragraph rows layout (number | text | file) */
+/* Paragraph rows layout: left (number/controls) | middle (text) | right (file) */
 .row {
   display: grid;
   grid-template-columns: 140px 1fr 320px;
@@ -149,7 +165,7 @@ button:disabled,
   margin-bottom: 24px;
 }
 
-/* Sub-layouts for the left column (number/reorder) */
+/* Sub-layout in the left column (stacked controls) */
 .para-num-row {
   display: flex;
   flex-direction: column;
@@ -157,7 +173,7 @@ button:disabled,
   align-items: flex-start;
 }
 
-/* Keep input and Apply side by side */
+/* Keep numeric input and Apply button on one line */
 .num-controls {
   display: flex;
   gap: 8px;
@@ -165,7 +181,7 @@ button:disabled,
   flex-wrap: wrap;
 }
 
-/* Text area sizing */
+/* Larger default text area for affidavit paragraphs */
 textarea {
   width: 100%;
   min-height: 140px;   /* a bit taller by default */
@@ -174,7 +190,7 @@ textarea {
   border-radius: 8px;
 }
 
-/* File input column */
+/* Inputs used in the left/right columns */
 input[type="number"],
 input[type="file"] {
   padding: 0.5rem;
@@ -186,7 +202,7 @@ input[type="file"] {
   margin-bottom: 6px;
 }
 
-/* Responsive: stack the file column under the text on narrower screens */
+/* Responsive: stack the file column under text on narrower screens */
 @media (max-width: 1100px) {
   .row {
     grid-template-columns: 160px 1fr; /* number | text */
@@ -196,7 +212,7 @@ input[type="file"] {
   }
 }
 
-/* Badges and toolbar */
+/* Badges and top toolbar */
 .pill {
   font: 600 .85rem/1 system-ui;
   padding: .2rem .5rem;
@@ -209,15 +225,8 @@ input[type="file"] {
   gap: 8px;
   margin-bottom: 10px;
 }
-.controls {
-  margin: 0.5rem 0 1rem;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
 
-/* Apply button (with disabled state) */
+/* Apply button for move control (with hover/disabled states) */
 .applyReorder {
   padding: 0.4rem 0.7rem;
   border: 1px solid #ccc;
@@ -230,9 +239,7 @@ input[type="file"] {
 .applyReorder:hover { background-color: #eaeaea; }
 .applyReorder[disabled] { opacity: .6; cursor: not-allowed; }
 
-/* === New: inline No. + number badge & move controls === */
-
-/* Inline "Paragraph No." + #N badge */
+/* === Inline “Paragraph No.” label + current number badge === */
 .no-inline {
   display: inline-flex;
   align-items: center;
@@ -241,7 +248,7 @@ input[type="file"] {
   margin-bottom: 6px;
 }
 
-/* Stack label above, input+Apply on one line */
+/* Move controls: label above, input+button on one line below */
 .move-controls {
   display: flex;
   flex-direction: column; /* label above */
@@ -254,7 +261,7 @@ input[type="file"] {
 }
 
 /* ============================================================================
-   General Heading (scoped, Word-like preview)
+   General Heading preview (scoped, Word-like)
    ============================================================================ */
 #heading .gh {
   max-width: 6.5in;              /* 8.5" page with ~1" side margins */
@@ -262,51 +269,20 @@ input[type="file"] {
   padding: 0;
   font-family: "Times New Roman", Times, serif; /* Word-like appearance */
 }
-
-/* Double-spaced lines, no extra margins so spacing is consistent */
-#heading .gh-line {
-  line-height: 2;  /* true double spacing */
-  margin: 0;
-}
-
-/* L1: Court File No. (right) */
-#heading .gh-file-no { text-align: right; }
-
-/* L2: Court name (center, bold + italic, uppercase) */
-#heading .gh-court {
+#heading .gh-line { line-height: 2; margin: 0; }   /* double spaced */
+#heading .gh-file-no { text-align: right; }        /* L1 */
+#heading .gh-court {                                /* L2 */
   text-align: center;
   font-weight: 700;
   font-style: italic;
   text-transform: uppercase;
 }
+#heading .gh-between { text-align: left; font-weight: 600; } /* L3 */
+#heading .gh-parties, #heading .gh-and { text-align: center; } /* L4,L6,L7 */
+#heading .gh-and { letter-spacing: 0.5px; font-weight: 600; }  /* L6 */
+#heading .gh-role { text-align: right; font-style: normal; }   /* L5,L8 */
 
-/* L3: BETWEEN (left, semi-bold) */
-#heading .gh-between { text-align: left; font-weight: 600; }
-
-/* L4 & L7 parties, and L6 -AND- stay centered */
-#heading .gh-parties,
-#heading .gh-and { text-align: center; }
-
-/* L6: -AND- */
-#heading .gh-and {
-  letter-spacing: 0.5px;
-  font-weight: 600;
-}
-
-/* L5 & L8 roles: right-aligned */
-#heading .gh-role {
-  text-align: right;
-  font-style: normal;
-}
-
-/* Scheme control (kept for future export modal UI) */
-.scheme-control {
-  margin-right: 12px;
-  font-size: 0.95rem;
-}
-.scheme-control select { margin-left: 6px; }
-
-/* --- Simple modal --- */
+/* --- Simple modal for export scheme selection --- */
 .modal {
   position: fixed;
   inset: 0;
@@ -318,7 +294,6 @@ input[type="file"] {
   z-index: 1000;
 }
 .modal[aria-hidden="false"] { display: flex; }
-
 .modal-dialog {
   background: #fff;
   border-radius: 12px;
@@ -328,14 +303,67 @@ input[type="file"] {
   box-shadow: 0 10px 30px rgba(0,0,0,.2);
 }
 .modal-dialog h3 { margin: 0 0 6px 0; }
+#schemeForm { display: grid; gap: 8px; margin: 12px 0 16px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
-#schemeForm {
-  display: grid;
+/* =========================================================
+   EXHIBIT SCHEME TOGGLE (letters | numbers)
+   ========================================================= */
+.scheme-control {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
-  margin: 12px 0 16px;
+  margin-left: 8px;     /* spacing from Redo button */
+  font-size: 14px;
 }
-.modal-actions {
+.scheme-label { color: #444; }
+.scheme-option { font-weight: 600; }
+
+/* iOS-style switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 24px;
+}
+.switch input { display: none; }
+.slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #ccc;
+  border-radius: 24px;
+  transition: 0.2s;
+}
+.slider:before {
+  content: "";
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  top: 3px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25);
+  transition: 0.2s;
+}
+.switch input:checked + .slider { background: #4caf50; }
+.switch input:checked + .slider:before { transform: translateX(18px); }
+
+/* ===== Controls Toolbar Layout (Add / Undo / Redo / Exhibit Toggle) ===== */
+.controls {
+  margin: 0.5rem 0 1rem;
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: nowrap; /* keeps bar on one line */
+}
+
+.controls-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
   gap: 8px;
-  justify-content: flex-end;
+  flex-wrap: wrap; /* graceful wrapping on very narrow screens */
 }

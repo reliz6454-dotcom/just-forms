@@ -156,7 +156,7 @@ button:disabled,
 .vs { text-align: center; font-weight: 700; }
 .muted { color: #666; }
 
-/* Paragraph rows layout: left (number/controls) | middle (text) | right (file) */
+/* Paragraph rows layout: left (number/controls) | middle (text) | right (file placeholder) */
 .row {
   display: grid;
   grid-template-columns: 140px 1fr 320px;
@@ -208,7 +208,7 @@ input[type="file"] {
     grid-template-columns: 160px 1fr; /* number | text */
   }
   .row-file {
-    grid-column: 1 / -1;  /* file column goes full width below */
+    grid-column: 1 / -1;  /* file column goes full width below (currently unused) */
   }
 }
 
@@ -367,3 +367,50 @@ input[type="file"] {
   gap: 8px;
   flex-wrap: wrap; /* graceful wrapping on very narrow screens */
 }
+
+/* =========================================================
+   MULTI-EXHIBIT STRIP & CHIPS
+   ========================================================= */
+.exhibit-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;          /* chips wrap when crowded */
+  margin-top: 8px;
+}
+
+.exhibit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  background: #fafafa;
+}
+
+.exhibit-chip .exhibit-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.exhibit-chip button {
+  padding: 0 6px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #f6f6f6;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 20px;
+}
+.exhibit-chip button:hover { background: #eaeaea; }
+
+/* Optional: horizontal scrolling if you prefer a single-line rail */
+/*
+.exhibit-strip {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.exhibit-chip { flex: 0 0 auto; }
+*/

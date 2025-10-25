@@ -1,4 +1,4 @@
-// affidavit-export.js (ES Module)
+// affidavit-export.js (ES Module) — MULTI-EXHIBIT UPDATE
 // Purpose: TXT export (working) + PDF scheme modal (stub for future merge)
 
 import { LS, loadJSON } from "./constants.js";
@@ -23,14 +23,31 @@ const exSaveScheme = (s) => {
 /* ---------- Utilities ---------- */
 function exAlpha(n) { let s = ""; while (n > 0) { n--; s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26); } return s; }
 const exByNumber = (a, b) => (a.number || 0) - (b.number || 0);
+
+/**
+ * Compute exhibit labels globally across ALL paragraphs, left→right within each paragraph,
+ * top→bottom by paragraph.number. Returns Map<exhibitId, labelString>.
+ */
 function exComputeExhibitLabels(paras, scheme) {
-  const map = new Map(); let idx = 1;
-  paras.filter(p => !!p.exhibitFileId).forEach(p => { map.set(p.id, scheme === "numbers" ? String(idx) : exAlpha(idx)); idx++; });
+  const map = new Map(); // exhibitId -> label
+  let idx = 1; // first exhibit is A / 1
+  paras.sort(exByNumber).forEach(p => {
+    (p.exhibits || []).forEach(ex => {
+      const label = scheme === "numbers" ? String(idx) : exAlpha(idx);
+      map.set(ex.id, label);
+      idx++;
+    });
+  });
   return map;
 }
 
 /* ---------- Heading helpers (self-contained for export) ---------- */
-function exPartyDisplayName(p) { if (!p) return ""; const company = (p.company || "").trim(); const person = [p.first || "", p.last || ""].map(s => s.trim()).filter(Boolean).join(" ").trim(); return company || person || ""; }
+function exPartyDisplayName(p) {
+  if (!p) return "";
+  const company = (p.company || "").trim();
+  const person = [p.first || "", p.last || ""].map(s => s.trim()).filter(Boolean).join(" ").trim();
+  return company || person || "";
+}
 const exCollectNames = (list) => (Array.isArray(list) ? list : []).map(exPartyDisplayName).map(s => s.trim()).filter(Boolean);
 const exListWithEtAl = (names, limit = 3) => names.length <= limit ? names.join(", ") : names.slice(0, limit).join(", ") + ", et al.";
 function exRoleLabelFor(side, count, isMotion, movingSide) {
@@ -41,7 +58,10 @@ function exRoleLabelFor(side, count, isMotion, movingSide) {
   const suffix = movingThisSide ? (count > 1 ? "/Moving Parties" : "/Moving Party") : (count > 1 ? "/Responding Parties" : "/Responding Party");
   return base + suffix;
 }
-function exFormatCourtFile(cf = {}) { const parts = [cf.year, cf.assign, cf.suffix].map(v => (v || "").toString().trim()).filter(Boolean); return parts.length ? ("CV-" + parts.join("-")) : ""; }
+function exFormatCourtFile(cf = {}) {
+  const parts = [cf.year, cf.assign, cf.suffix].map(v => (v || "").toString().trim()).filter(Boolean);
+  return parts.length ? ("CV-" + parts.join("-")) : "";
+}
 function exBuildGeneralHeading(caseData = {}) {
   const courtName = (caseData.courtName || "ONTARIO SUPERIOR COURT OF JUSTICE").trim();
   const fileNo    = exFormatCourtFile(caseData.courtFile || {});
@@ -98,10 +118,10 @@ function exBuildAffidavitText() {
   const opening = [title ? `I, ${title}` : "I,", cityPart, provincePart, capacityPhrase || null].filter(Boolean).join(", ");
   lines.push(`${opening}, ${oathText}`, "");
 
-  // Numbered paragraphs with inline exhibit refs
+  // Numbered paragraphs with inline exhibit refs (multi-exhibit)
   paras.forEach(p => {
-    const label = p.exhibitFileId ? labels.get(p.id) : null;
-    const suffix = label ? ` (Exhibit ${label})` : "";
+    const ids = (p.exhibits || []).map(ex => labels.get(ex.id)).filter(Boolean);
+    const suffix = ids.length ? ` (Exhibit${ids.length > 1 ? "s" : ""} ${ids.join(", ")})` : "";
     lines.push(`${p.number}. ${p.text || ""}${suffix}`);
   });
 
@@ -158,12 +178,15 @@ document.addEventListener("DOMContentLoaded", () => {
     btnPdf.onclick = async () => {
       const scheme = await exAskExhibitScheme();
       if (!scheme) return; // user canceled
+
+      // Compute global exhibit labels (for future PDF merge ordering)
       const paras = exLoadParas().sort(exByNumber);
-      exComputeExhibitLabels(paras, scheme); // ready for future PDF merge
+      const labels = exComputeExhibitLabels(paras, scheme);
+      // 'labels' is Map<exhibitId, label>. Use when assembling a merged PDF.
 
       alert(
         `Export will use ${scheme === "letters" ? "Letters (A, B, C…)" : "Numbers (1, 2, 3…)"}.` +
-        "\n\n(Stub: implement PDF merge here using the computed labels.)"
+        "\n\n(Stub: implement PDF merge here using the computed labels in paragraph/exhibit order.)"
       );
     };
   }

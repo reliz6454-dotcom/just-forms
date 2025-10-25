@@ -1,11 +1,33 @@
-// affidavit-body.js (ES Module)
+// affidavit-body.js (ES Module) — MULTI-EXHIBIT + SAFE DOM HELPER
 // Purpose: UI (heading/intro preview, paragraph editor, history, files)
 
 import { LS, loadJSON, saveJSON } from "./constants.js";
 
 /* ---------- DOM helpers ---------- */
 const $ = (sel, el = document) => el.querySelector(sel);
-const el = (tag, props = {}) => Object.assign(document.createElement(tag), props);
+
+/** Safe element creator:
+ * - assigns plain props via Object.assign
+ * - assigns dataset keys via element.dataset[k] = v (no throwing)
+ * - optional children: el('div', {..}, child1, child2)
+ */
+function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  if (props) {
+    const { dataset, ...rest } = props;
+    if (rest && Object.keys(rest).length) Object.assign(node, rest);
+    if (dataset) {
+      for (const [k, v] of Object.entries(dataset)) {
+        try { node.dataset[k] = v; } catch { /* ignore */ }
+      }
+    }
+  }
+  for (const c of children) {
+    if (c == null) continue;
+    node.append(c);
+  }
+  return node;
+}
 
 /* ---------- Exhibit scheme (letters | numbers) ---------- */
 const getExhibitScheme = () => localStorage.getItem(LS.EXHIBIT_SCHEME) || "letters";
@@ -72,13 +94,35 @@ async function getFileBlob(id) {
 const byNumber = (a, b) => (a.number || 0) - (b.number || 0);
 
 /* ---------- Model helpers ---------- */
-const createParagraph = () => ({ id: crypto.randomUUID(), number: 0, text: "", exhibitFileId: null });
+const createParagraph = () => ({ id: crypto.randomUUID(), number: 0, text: "", exhibits: [] });
 function newParagraph() {
   const list = loadParas().sort(byNumber);
   const p = createParagraph(); p.number = list.length + 1;
   return p;
 }
 function renumber(list) { list.forEach((p, i) => { p.number = i + 1; }); return list; }
+
+/* ---------- One-time migration: exhibitFileId -> exhibits[] ---------- */
+async function migrateParasIfNeeded() {
+  let changed = false;
+  const list = loadParas();
+  for (const p of list) {
+    if (p && p.exhibitFileId && !Array.isArray(p.exhibits)) {
+      let name = "Exhibit.pdf";
+      try {
+        const rec = await getFileBlob(p.exhibitFileId);
+        if (rec?.name) name = rec.name;
+      } catch {}
+      p.exhibits = [{ id: crypto.randomUUID(), fileId: p.exhibitFileId, name }];
+      delete p.exhibitFileId;
+      changed = true;
+    } else if (p && !Array.isArray(p.exhibits)) {
+      p.exhibits = []; // ensure array exists going forward
+      changed = true;
+    }
+  }
+  if (changed) saveParas(list);
+}
 
 /* ---------- Paragraph CRUD & reorder ---------- */
 function moveToPosition(id, target1) {
@@ -110,11 +154,53 @@ function upsertParagraph(patch) {
 }
 function removeParagraph(id) { pushHistory(); const list = loadParas().filter(p => p.id !== id).sort(byNumber); saveParas(renumber(list)); }
 
-/* ---------- Exhibit labels (on-screen pills) ---------- */
+/* ---------- Exhibit mutations (multi-exhibit) ---------- */
+function addExhibits(pId, entries) {
+  // entries: [{fileId, name}, ...]
+  pushHistory();
+  const list = loadParas().sort(byNumber);
+  const i = list.findIndex(p => p.id === pId);
+  if (i === -1) return;
+  list[i].exhibits = list[i].exhibits || [];
+  for (const e of entries) {
+    list[i].exhibits.push({ id: crypto.randomUUID(), fileId: e.fileId, name: e.name || "Exhibit.pdf" });
+  }
+  saveParas(renumber(list));
+}
+function moveExhibit(pId, exId, dir) {
+  // dir: -1 left, +1 right
+  pushHistory();
+  const list = loadParas().sort(byNumber);
+  const i = list.findIndex(p => p.id === pId);
+  if (i === -1) return;
+  const exs = list[i].exhibits || [];
+  const idx = exs.findIndex(x => x.id === exId);
+  if (idx === -1) return;
+  const swapWith = idx + dir;
+  if (swapWith < 0 || swapWith >= exs.length) { syncUndoRedoButtons(); return; }
+  [exs[idx], exs[swapWith]] = [exs[swapWith], exs[idx]];
+  saveParas(renumber(list));
+}
+function removeExhibit(pId, exId) {
+  pushHistory();
+  const list = loadParas().sort(byNumber);
+  const i = list.findIndex(p => p.id === pId);
+  if (i === -1) return;
+  list[i].exhibits = (list[i].exhibits || []).filter(x => x.id !== exId);
+  saveParas(renumber(list));
+}
+
+/* ---------- Exhibit labels (global across all exhibits) ---------- */
 function computeExhibitLabels(paras) {
   const scheme = getExhibitScheme();
-  const map = new Map(); let idx = 0;
-  paras.filter(p => !!p.exhibitFileId).forEach(p => { if (!map.has(p.id)) { map.set(p.id, labelFor(idx, scheme)); idx++; } });
+  const map = new Map(); // exhibitId -> label
+  let idx = 0;
+  paras.sort(byNumber).forEach(p => {
+    (p.exhibits || []).forEach(ex => {
+      map.set(ex.id, labelFor(idx, scheme));
+      idx++;
+    });
+  });
   return map;
 }
 
@@ -205,16 +291,28 @@ function renderParagraphs() {
   paraList.innerHTML = "";
   list.forEach(p => paraList.appendChild(renderRow(p, list.length, labels)));
 }
+
 function renderRow(p, totalCount, labels) {
   const row = el("div", { className: "row" });
-  const lbl = labels.get(p.id);
-  const labelText = p.exhibitFileId ? (lbl ? `Exhibit ${lbl}` : "Exhibit") : "No exhibit";
+
+  // Build exhibits summary for the pill under the textarea
+  const exCount = (p.exhibits || []).length;
+  let pillText = "No exhibits";
+  if (exCount === 1) {
+    const only = p.exhibits[0];
+    const lab = labels.get(only.id);
+    pillText = `Exhibit ${lab || ""}`.trim();
+  } else if (exCount > 1) {
+    const labs = p.exhibits.map(ex => labels.get(ex.id)).filter(Boolean).join(", ");
+    pillText = `Exhibits ${labs}`;
+  }
+
   row.innerHTML = `
     <div class="row-num">
       <div class="para-num-row">
-        <label class="no-inline"> Para No. <span class="pill"># ${p.number}</span></label>
+        <label class="no-inline"> Paragraph No. <span class="pill"># ${p.number}</span></label>
         <div class="move-controls">
-          <label for="move-${p.id}">Move to Para No.:</label>
+          <label for="move-${p.id}">Move to Paragraph No.:</label>
           <div class="num-controls">
             <input type="number" id="move-${p.id}" class="num" min="1" max="${totalCount}" step="1" value="${p.number}">
             <button type="button" class="applyReorder">Apply</button>
@@ -224,45 +322,121 @@ function renderRow(p, totalCount, labels) {
         <button type="button" class="insBelow">Insert new paragraph below</button>
       </div>
     </div>
+
     <div class="row-text">
       <label>Paragraph text</label>
       <textarea class="txt" placeholder="Type the paragraph…">${p.text || ""}</textarea>
       <div>
-        <span class="pill">${labelText}</span>
-        <span class="fileName ml-6"></span>
+        <span class="pill">${pillText}</span>
+      </div>
+
+      <!-- Exhibit strip -->
+      <div class="exhibit-strip">
+        <!-- chips injected here -->
+        <button type="button" class="addExhibitsBtn">+ Add exhibit(s)</button>
+        <input type="file" class="fileMulti" accept="application/pdf" multiple hidden>
       </div>
     </div>
-    <div class="row-file">
-      <label>Attach PDF (optional)</label>
-      <input type="file" class="file" accept="application/pdf">
-    </div>`;
+
+    <!-- Right column currently unused (kept for layout compatibility) -->
+    <div class="row-file"></div>
+  `;
+
+  // Controls
   const num = $(".num", row);
   const txt = $(".txt", row);
-  const file = $(".file", row);
   const del = $(".del", row);
   const insBelow = $(".insBelow", row);
-  const name = $(".fileName", row);
   const applyReorder = $(".applyReorder", row);
-  const desiredNumber = () => { let n = Math.round(Number(num.value)); if (!Number.isFinite(n) || n < 1) n = 1; if (n > totalCount) n = totalCount; return n; };
+  const exStrip = $(".exhibit-strip", row);
+  const addBtn = $(".addExhibitsBtn", row);
+  const fileMulti = $(".fileMulti", row);
+
+  // Move paragraph
+  const desiredNumber = () => {
+    let n = Math.round(Number(num.value));
+    if (!Number.isFinite(n) || n < 1) n = 1;
+    if (n > totalCount) n = totalCount;
+    return n;
+  };
   const syncButtonState = () => { applyReorder.disabled = (desiredNumber() === p.number); };
   syncButtonState(); num.addEventListener("input", syncButtonState);
   applyReorder.onclick = () => { const n = desiredNumber(); if (n !== p.number) { moveToPosition(p.id, n); renderParagraphs(); } };
+
+  // Paragraph text
+  txt.oninput = () => { upsertParagraph({ id: p.id, text: txt.value }); };
+
+  // Paragraph actions
   del.onclick = () => { if (confirm("Remove this paragraph?")) { removeParagraph(p.id); renderParagraphs(); } };
   insBelow.onclick = () => { insertNewBelow(p.number); renderParagraphs(); };
-  txt.oninput = () => { upsertParagraph({ id: p.id, text: txt.value }); };
-  file.onchange = async () => {
-    const f = file.files?.[0]; if (!f) return;
-    if (f.type !== "application/pdf") { alert("Please attach a PDF."); file.value = ""; return; }
-    const fileId = await saveFileBlob(f);
-    upsertParagraph({ id: p.id, exhibitFileId: fileId });
-    renderParagraphs();
+
+  // Render exhibit chips
+  function renderExhibitChips() {
+    // Remove any existing chips (keep the add button + hidden input at the end)
+    [...exStrip.querySelectorAll(".exhibit-chip")].forEach(n => n.remove());
+
+    (p.exhibits || []).forEach((ex, idx) => {
+      const lab = labels.get(ex.id) || "";
+      const chip = el("div", { className: "exhibit-chip", dataset: { exId: ex.id } });
+
+      const labelSpan = el("span", { className: "pill exhibit-label", innerText: `Exhibit ${lab}` });
+      const nameSpan  = el("span", { className: "exhibit-name", innerText: `• ${ex.name || "Exhibit.pdf"}` });
+
+      const actions = el("div", { className: "exhibit-actions" });
+      const leftBtn  = el("button", { type: "button", className: "ex-left",  innerText: "←", title: "Move exhibit left" });
+      const rightBtn = el("button", { type: "button", className: "ex-right", innerText: "→", title: "Move exhibit right" });
+      const xBtn     = el("button", { type: "button", className: "ex-remove", innerText: "✕", title: "Remove exhibit" });
+
+      // Disable when at bounds
+      if (idx === 0) leftBtn.disabled = true;
+      if (idx === (p.exhibits.length - 1)) rightBtn.disabled = true;
+
+      leftBtn.onclick  = () => { moveExhibit(p.id, ex.id, -1); renderParagraphs(); };
+      rightBtn.onclick = () => { moveExhibit(p.id, ex.id, +1); renderParagraphs(); };
+      xBtn.onclick     = () => { if (confirm("Remove this exhibit?")) { removeExhibit(p.id, ex.id); renderParagraphs(); } };
+
+      actions.append(leftBtn, rightBtn, xBtn);
+      chip.append(labelSpan, nameSpan, actions);
+
+      // Insert before the add button
+      exStrip.insertBefore(chip, addBtn);
+    });
+  }
+
+  renderExhibitChips();
+
+  // Add exhibits (multiple)
+  addBtn.onclick = () => fileMulti.click();
+  fileMulti.onchange = async () => {
+    const files = Array.from(fileMulti.files || []);
+    if (!files.length) return;
+
+    // Validate all are PDFs
+    const invalid = files.find(f => f.type !== "application/pdf");
+    if (invalid) { alert("Please attach PDF files only."); fileMulti.value = ""; return; }
+
+    try {
+      const entries = [];
+      for (const f of files) {
+        const fileId = await saveFileBlob(f);
+        entries.push({ fileId, name: f.name });
+      }
+      addExhibits(p.id, entries);
+      renderParagraphs();
+    } catch (e) {
+      console.error("Exhibit save failed:", e);
+      alert("Could not save one of the selected files. Please try again.");
+    }
+
+    // Reset the input so the same file can be chosen again if desired
+    fileMulti.value = "";
   };
-  (async () => { if (p.exhibitFileId) { const rec = await getFileBlob(p.exhibitFileId); if (rec) name.textContent = `• ${rec.name}`; } })();
+
   return row;
 }
 
 /* ---------- Init ---------- */
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const backBtn = $("#back"); if (backBtn) backBtn.onclick = () => history.back();
 
   // Toggle for exhibit scheme
@@ -283,6 +457,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const undoBtn = $("#undoBtn"), redoBtn = $("#redoBtn");
   if (undoBtn) undoBtn.onclick = () => undo();
   if (redoBtn) redoBtn.onclick = () => redo();
+
+  // One-time migration from single exhibit to multi
+  await migrateParasIfNeeded();
 
   renderHeading();
   renderIntro();

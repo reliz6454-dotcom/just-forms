@@ -140,9 +140,10 @@ function exBuildAffidavitText() {
       if (r.type === "text") {
         line += r.text || "";
       } else if (r.type === "exhibit") {
-        const lab = labels.get(r.exId);
-        if (lab) line += `Exhibit ${lab}`;
-      }
+  const lab = labels.get(r.exId);
+  if (lab) line += `(exhibit "${lab}")`;
+}
+
     });
     lines.push(line);
   });

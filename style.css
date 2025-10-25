@@ -433,23 +433,37 @@ input[type="file"] {
   box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
 }
 
-/* Non-editable inline exhibit token (chip) */
+/* Non-editable inline exhibit token (chip) — render like text with clear spacing */
 .exh-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  margin: 0 2px;
-  border: 1px solid #ddd;
-  border-radius: 999px;
-  background: #fafafa;
-  font-weight: 600;
-  line-height: 1.4;
+  display: inline;         /* no pill frame */
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0 0.2em;         /* ensures visible space before/after */
+  font-weight: 600;        /* subtle emphasis; set to 'inherit' to match text exactly */
+  line-height: inherit;
   user-select: none;
   -webkit-user-select: none;
 }
 
-/* Make sure chips don’t collapse at line edges */
+/* Remove the old hair-space padding */
 .exh-chip::before,
 .exh-chip::after {
-  content: "\00a0"; /* non-breaking hair spacing around chip */
+  content: none;
+}
+
+/* Optional visual cue on hover */
+.exh-chip:hover {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+/* Remove up/down arrows from number inputs */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield; /* Firefox */
 }

@@ -319,7 +319,7 @@ function renderEditorFromRuns(p, labels) {
       const chip = el("span", { className: "exh-chip", dataset: { exId: run.exId } });
       chip.setAttribute("contenteditable", "false");
       chip.setAttribute("draggable", "false");
-      chip.textContent = `Exhibit ${lab}`;
+      chip.textContent = `(exhibit "${lab || "?"}")`;
       editor.append(chip);
     }
   });
@@ -471,19 +471,6 @@ function renderRow(p, totalCount, labels) {
   const mid = el("div", { className: "row-text" });
   const textLbl = el("label", { innerText: "Paragraph text" });
 
-  // Build exhibits summary pill
-  const exCount = (p.exhibits || []).length;
-  let pillText = "No exhibits";
-  if (exCount === 1) {
-    const only = p.exhibits[0];
-    const lab = labels.get(only.id);
-    pillText = `Exhibit ${lab || ""}`.trim();
-  } else if (exCount > 1) {
-    const labs = p.exhibits.map(ex => labels.get(ex.id)).filter(Boolean).join(", ");
-    pillText = `Exhibits ${labs}`;
-  }
-  const pill = el("span", { className: "pill", innerText: pillText });
-
   // Editor
   const editor = renderEditorFromRuns(p, labels);
   protectChips(editor);
@@ -504,7 +491,7 @@ function renderRow(p, totalCount, labels) {
     (p.exhibits || []).forEach((ex, idx) => {
       const lab = labels.get(ex.id) || "";
       const chip = el("div", { className: "exhibit-chip rail-chip", dataset: { exId: ex.id } });
-      const labelSpan = el("span", { className: "pill exhibit-label", innerText: `Exhibit ${lab}` });
+      const labelSpan = el("span", { className: "pill exhibit-label", innerText: `exhibit "${lab}"` });
       const nameSpan  = el("span", { className: "exhibit-name", innerText: `• ${ex.name || "Exhibit.pdf"}` });
       const actions   = el("div", { className: "exhibit-actions" });
       const leftBtn   = el("button", { type: "button", className: "ex-left",  innerText: "←", title: "Move exhibit left" });
@@ -569,7 +556,8 @@ function renderRow(p, totalCount, labels) {
     fileMulti.value = "";
   };
 
-  mid.append(textLbl, editor, el("div", {}, pill), strip);
+  mid.append(textLbl, editor, strip);
+
 
   // Right column (kept for layout compatibility; unused)
   const right = el("div", { className: "row-file" });

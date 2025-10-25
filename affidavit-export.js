@@ -1,5 +1,6 @@
-// affidavit-export.js (ES Module) — MULTI-EXHIBIT UPDATE
-// Purpose: TXT export (working) + PDF scheme modal (stub for future merge)
+// affidavit-export.js (ES Module) — INLINE EXHIBIT CHIPS AWARE
+// Purpose: TXT export (walk paragraph runs with non-deletable exhibit chips)
+//          + PDF scheme modal (stub for future merge)
 
 import { LS, loadJSON } from "./constants.js";
 
@@ -48,8 +49,8 @@ function exPartyDisplayName(p) {
   const person = [p.first || "", p.last || ""].map(s => s.trim()).filter(Boolean).join(" ").trim();
   return company || person || "";
 }
-const exCollectNames = (list) => (Array.isArray(list) ? list : []).map(exPartyDisplayName).map(s => s.trim()).filter(Boolean);
-const exListWithEtAl = (names, limit = 3) => names.length <= limit ? names.join(", ") : names.slice(0, limit).join(", ") + ", et al.";
+const exCollectNames   = (list) => (Array.isArray(list) ? list : []).map(exPartyDisplayName).map(s => s.trim()).filter(Boolean);
+const exListWithEtAl  = (names, limit = 3) => names.length <= limit ? names.join(", ") : names.slice(0, limit).join(", ") + ", et al.";
 function exRoleLabelFor(side, count, isMotion, movingSide) {
   const isPl = side === "plaintiff";
   const base = isPl ? (count > 1 ? "Plaintiffs" : "Plaintiff") : (count > 1 ? "Defendants" : "Defendant");
@@ -69,20 +70,29 @@ function exBuildGeneralHeading(caseData = {}) {
   const dfRaw = exCollectNames(caseData.defendants || []);
   const pl = plRaw.length ? exListWithEtAl(plRaw, 3) : "[Add plaintiffs in the General Heading form]";
   const df = dfRaw.length ? exListWithEtAl(dfRaw, 3) : "[Add defendants in the General Heading form]";
-  const isMotion = !!(caseData.motion && caseData.motion.isMotion);
+  const isMotion   = !!(caseData.motion && caseData.motion.isMotion);
   const movingSide = caseData.motion ? caseData.motion.movingSide : null;
   const plRole = exRoleLabelFor("plaintiff", plRaw.length || 1, isMotion, movingSide);
   const dfRole = exRoleLabelFor("defendant", dfRaw.length || 1, isMotion, movingSide);
-  return { l1: fileNo ? `Court File No. ${fileNo}` : "Court File No.", l2: courtName, l3: "BETWEEN:", l4: pl, l5: plRole, l6: "-AND-", l7: df, l8: dfRole };
+  return {
+    l1: fileNo ? `Court File No. ${fileNo}` : "Court File No.",
+    l2: courtName,
+    l3: "BETWEEN:",
+    l4: pl,
+    l5: plRole,
+    l6: "-AND-",
+    l7: df,
+    l8: dfRole
+  };
 }
 
 /* ---------- TXT export ---------- */
 function exBuildAffidavitText() {
-  const c   = exLoadCase();
-  const d   = c.deponent || {};
-  const oath = (exLoadOath() || "").toLowerCase();
+  const c     = exLoadCase();
+  const d     = c.deponent || {};
+  const oath  = (exLoadOath() || "").toLowerCase();
+  const paras = exLoadParas().sort(exByNumber);
 
-  const paras  = exLoadParas().sort(exByNumber);
   const scheme = exLoadScheme();
   const labels = exComputeExhibitLabels(paras, scheme);
 
@@ -118,11 +128,23 @@ function exBuildAffidavitText() {
   const opening = [title ? `I, ${title}` : "I,", cityPart, provincePart, capacityPhrase || null].filter(Boolean).join(", ");
   lines.push(`${opening}, ${oathText}`, "");
 
-  // Numbered paragraphs with inline exhibit refs (multi-exhibit)
+  // Numbered paragraphs — walk runs[] so inline exhibit chips are preserved
   paras.forEach(p => {
-    const ids = (p.exhibits || []).map(ex => labels.get(ex.id)).filter(Boolean);
-    const suffix = ids.length ? ` (Exhibit${ids.length > 1 ? "s" : ""} ${ids.join(", ")})` : "";
-    lines.push(`${p.number}. ${p.text || ""}${suffix}`);
+    // Back-compat: if runs[] missing, synthesize from text + exhibits
+    const runs = Array.isArray(p.runs)
+      ? p.runs
+      : [{ type: "text", text: p.text || "" }, ...(p.exhibits || []).map(ex => ({ type: "exhibit", exId: ex.id }))];
+
+    let line = `${p.number}. `;
+    runs.forEach(r => {
+      if (r.type === "text") {
+        line += r.text || "";
+      } else if (r.type === "exhibit") {
+        const lab = labels.get(r.exId);
+        if (lab) line += `Exhibit ${lab}`;
+      }
+    });
+    lines.push(line);
   });
 
   return lines.join("\n");
@@ -180,7 +202,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!scheme) return; // user canceled
 
       // Compute global exhibit labels (for future PDF merge ordering)
-      const paras = exLoadParas().sort(exByNumber);
+      const paras  = exLoadParas().sort(exByNumber);
       const labels = exComputeExhibitLabels(paras, scheme);
       // 'labels' is Map<exhibitId, label>. Use when assembling a merged PDF.
 

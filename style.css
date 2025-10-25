@@ -414,3 +414,42 @@ input[type="file"] {
 }
 .exhibit-chip { flex: 0 0 auto; }
 */
+
+/* =========================================================
+   INLINE CHIPS EDITOR (contenteditable paragraph body)
+   ========================================================= */
+.para-editor {
+  width: 100%;
+  min-height: 140px;
+  padding: 0.6rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  white-space: pre-wrap;         /* preserve user line breaks */
+  word-wrap: break-word;
+  outline: none;                 /* we’ll control focus ring */
+}
+.para-editor:focus {
+  border-color: #999;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
+}
+
+/* Non-editable inline exhibit token (chip) */
+.exh-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  margin: 0 2px;
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  background: #fafafa;
+  font-weight: 600;
+  line-height: 1.4;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Make sure chips don’t collapse at line edges */
+.exh-chip::before,
+.exh-chip::after {
+  content: "\00a0"; /* non-breaking hair spacing around chip */
+}

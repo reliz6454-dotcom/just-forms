@@ -343,7 +343,7 @@ function addExhibits(pId, entries) {
   const newExIds = [];
   for (const e of entries) {
     const exId = crypto.randomUUID();
-    p.exhibits.push({ id: exId, fileId: e.fileId, name: e.name || "Exhibit.pdf" });
+    p.exhibits.push({ id: exId, fileId: e.fileId, name: e.name || "Exhibit" });
     newExIds.push(exId);
   }
   for (const exId of newExIds) p.runs.push({ type: "exhibit", exId });
@@ -380,15 +380,6 @@ function removeExhibit(pId, exId) {
   p.exhibits = (p.exhibits || []).filter(x => x.id !== exId);
   p.runs = (p.runs || []).filter(r => !(r.type === "exhibit" && r.exId === exId));
   saveParas(renumber(list));
-}
-
-/* ---------- Paragraph list UI ---------- */
-const paraList = $("#paraList");
-function renderParagraphs() {
-  const list = loadParas().sort(byNumber).map(ensureRuns);
-  const labels = computeExhibitLabels(list);
-  paraList.innerHTML = "";
-  list.forEach(p => paraList.appendChild(renderRow(p, list.length, labels)));
 }
 
 /* ---------- Affidavit linkage helpers ---------- */
@@ -448,14 +439,13 @@ function renderGuidanceBlock() {
   docMetaGuidance.innerHTML = "";
   const title = el("h4", { innerText: "Why this matters" });
   const p1    = el("p",  { innerText: g.intro });
-  const p2 = el("p",  { innerText: g.note });
+  const p2    = el("p",  { innerText: g.note });
   const exH   = el("h4", { innerText: g.examplesTitle });
   const list  = el("ul");
   g.examples.forEach(txt => list.append(el("li", { innerText: txt })));
   docMetaGuidance.append(title, p1, p2, exH, list);
 }
 
-// helper to make the "No document date" checkbox under the date field
 function makeNoDateControl(forInputId) {
   const wrap = document.createElement("div");
   wrap.className = "field";
@@ -499,7 +489,6 @@ function openDocMetaModal(payload) {
     const value = payload.defaults?.[field.key] ?? "";
     switch (field.type) {
       case "textarea": {
-        // NEW: smart placeholder built from guidance examples
         const ex = Array.isArray(guidance.examples) ? guidance.examples.slice(0, 3) : [];
         const placeholder =
           ex.length
@@ -556,7 +545,6 @@ function openDocMetaModal(payload) {
   lockBackground();
   docMetaModal.setAttribute("aria-hidden", "false");
   trapFocus(docMetaModal);
-  // focus first input
   const firstInput = docMetaForm.querySelector("textarea, input, select, button");
   (firstInput || docMetaSave)?.focus();
 }
@@ -639,8 +627,6 @@ async function handleDocMetaSave() {
   processNextMetaInQueue();
 }
 
-/* Removed Skip completely: queue won’t advance until user saves */
-
 /* Queue driver */
 function processNextMetaInQueue() {
   if (_pendingMetaQueue.length === 0) return;
@@ -681,22 +667,41 @@ function renderRow(p, totalCount, labels) {
   // Exhibit strip
   const strip = el("div", { className: "exhibit-strip" });
   const addBtn = el("button", { type: "button", className: "addExhibitsBtn", innerText: "+ Add exhibit(s)" });
-  const fileMulti = el("input", { type: "file", className: "fileMulti", accept: "application/pdf", multiple: true });
+
+  // ✅ Accept PDFs AND images now
+  const fileMulti = el("input", { type: "file", className: "fileMulti", accept: "application/pdf,image/*", multiple: true });
   fileMulti.hidden = true;
 
   strip.append(addBtn, fileMulti);
+
+  function makeClickableSpan(span, onOpen) {
+    span.classList.add("clickable");
+    span.tabIndex = 0;
+    span.addEventListener("click", onOpen);
+    span.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); }
+    });
+  }
 
   function renderExhibitChipsRail() {
     [...strip.querySelectorAll(".rail-chip")].forEach(n => n.remove());
     (p.exhibits || []).forEach((ex, idx) => {
       const lab = labels.get(ex.id) || "";
       const chip = el("div", { className: "exhibit-chip rail-chip", dataset: { exId: ex.id } });
-      const labelSpan = el("span", { className: "pill exhibit-label", innerText: `exhibit "${lab}"` });
-      const nameSpan  = el("span", { className: "exhibit-name", innerText: `• ${ex.name || "Exhibit.pdf"}` });
+
+      const labelSpan = el("span", { className: "pill exhibit-label", innerText: `exhibit "${lab}"`, title: "Edit exhibit details" });
+      const nameSpan  = el("span", { className: "exhibit-name", innerText: `• ${ex.name || "Exhibit"}`, title: "Edit exhibit details" });
+
+      const openEditor = () => { openDocMetaForFile(ex.fileId); };
+
+      // ✅ Make both label and filename clickable to re-open the metadata modal
+      makeClickableSpan(labelSpan, openEditor);
+      makeClickableSpan(nameSpan, openEditor);
+
       const actions   = el("div", { className: "exhibit-actions" });
       const leftBtn   = el("button", { type: "button", className: "ex-left",  innerText: "←", title: "Move exhibit left" });
       const rightBtn  = el("button", { type: "button", className: "ex-right", innerText: "→", title: "Move exhibit right" });
-      const editBtn   = el("button", { type: "button", className: "ex-edit",  innerText: "Edit", title: "Edit description/date/type" }); // NEW
+      const editBtn   = el("button", { type: "button", className: "ex-edit",  innerText: "Edit", title: "Edit description/date/type" });
       const xBtn      = el("button", { type: "button", className: "ex-remove", innerText: "✕", title: "Remove exhibit" });
 
       if (idx === 0) leftBtn.disabled = true;
@@ -704,10 +709,10 @@ function renderRow(p, totalCount, labels) {
 
       leftBtn.onclick  = () => { moveExhibit(p.id, ex.id, -1); renderParagraphs(); };
       rightBtn.onclick = () => { moveExhibit(p.id, ex.id, +1); renderParagraphs(); };
-      editBtn.onclick  = () => { openDocMetaForFile(ex.fileId); }; // NEW
+      editBtn.onclick  = openEditor;
       xBtn.onclick     = () => { if (confirm("Remove this exhibit?")) { removeExhibit(p.id, ex.id); renderParagraphs(); } };
 
-      actions.append(leftBtn, rightBtn, editBtn, xBtn); // NEW: includes Edit
+      actions.append(leftBtn, rightBtn, editBtn, xBtn);
       chip.append(labelSpan, nameSpan, actions);
       strip.insertBefore(chip, addBtn);
     });
@@ -741,8 +746,9 @@ function renderRow(p, totalCount, labels) {
     const files = Array.from(fileMulti.files || []);
     if (!files.length) return;
 
-    const invalid = files.find(f => f.type !== "application/pdf");
-    if (invalid) { alert("Please attach PDF files only."); fileMulti.value = ""; return; }
+    // ✅ Validate: allow PDFs and images
+    const invalid = files.find(f => !(f.type === "application/pdf" || f.type.startsWith("image/")));
+    if (invalid) { alert("Please attach PDF files or images only."); fileMulti.value = ""; return; }
 
     try {
       const entries = [];
@@ -754,7 +760,7 @@ function renderRow(p, totalCount, labels) {
         _pendingMetaQueue.push({
           fileId,
           defaults: {
-            shortDesc: f.name.replace(/\.pdf$/i, ""),
+            shortDesc: f.name.replace(/\.(pdf|png|jpe?g|gif|webp|tiff?)$/i, ""),
             docDate: (f.name.match(/\b(20\d{2}|19\d{2})[-_\.]?(0[1-9]|1[0-2])[-_\.]?(0[1-9]|[12]\d|3[01])\b/) || [])[0]?.replace(/[_.]/g, "-") || ""
           }
         });
@@ -781,11 +787,22 @@ function renderRow(p, totalCount, labels) {
   return row;
 }
 
+/* ---------- Paragraph list UI (ultra-defensive/best practice) ---------- */
+function renderParagraphs() {
+  const container = document.querySelector("#paraList");
+  if (!container) return; // safely no-op if DOM not ready or removed
+
+  const list = loadParas().sort(byNumber).map(ensureRuns);
+  const labels = computeExhibitLabels(list);
+
+  container.innerHTML = "";
+  list.forEach(p => container.appendChild(renderRow(p, list.length, labels)));
+}
+
 /* ---------- Init ---------- */
 document.addEventListener("DOMContentLoaded", async () => {
   ensureAffidavitId();
 
-  // Grab modal nodes AFTER DOM is ready
   const backBtn = $("#back"); if (backBtn) backBtn.onclick = () => history.back();
 
   // Exhibit label toggle
@@ -814,18 +831,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   docMetaSave     = $("#docMetaSave");
   docMetaGuidance = $("#docMetaGuidance");
 
-  // NEW: Disable all ways to close except Save
   if (docMetaModal) {
-    // 1) Click outside does nothing now
     docMetaModal.addEventListener("click", (e) => {
       if (e.target === docMetaModal) {
         e.stopPropagation();
         e.preventDefault();
-        // Optional: nudge the user
         docMetaErr.textContent = "Please complete the fields and click Save to continue.";
       }
     });
-    // 2) Prevent default close on Escape (handled in trapFocus)
   }
 
   if (docMetaSave) docMetaSave.onclick = handleDocMetaSave;

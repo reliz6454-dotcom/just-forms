@@ -220,6 +220,11 @@ input[type="file"] {
 }
 .exhibit-chip button:hover { background: #eaeaea; }
 
+/* Make exhibit label and filename obviously interactive */
+.clickable { cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.clickable:focus { outline: 2px solid #999; outline-offset: 2px; }
+
+
 /* ===== Inline chips editor ===== */
 .para-editor {
   width: 100%;

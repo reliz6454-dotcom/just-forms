@@ -487,6 +487,7 @@ function openDocMetaModal(payload) {
 
     let input;
     const value = payload.defaults?.[field.key] ?? "";
+
     switch (field.type) {
       case "textarea": {
         const ex = Array.isArray(guidance.examples) ? guidance.examples.slice(0, 3) : [];
@@ -497,18 +498,26 @@ function openDocMetaModal(payload) {
         input = el("textarea", { id, value, placeholder });
         break;
       }
-      case "select":
+      case "select": {
         input = el("select", { id });
-        (field.choices || []).forEach(opt =>
+        const choices = field.choices || [];
+        choices.forEach(opt =>
           input.append(el("option", { value: opt, innerText: opt }))
         );
+        // Robust prefill: if saved value isn't in the list, show it anyway
+        if (value && !choices.includes(value)) {
+          input.append(el("option", { value, innerText: value }));
+        }
         if (value) input.value = value;
         break;
-      case "date":
+      }
+      case "date": {
         input = el("input", { id, type: "date", value });
         break;
-      default:
+      }
+      default: {
         input = el("input", { id, type: "text", value });
+      }
     }
 
     wrap.append(label, input);
@@ -517,14 +526,17 @@ function openDocMetaModal(payload) {
     if (field.type === "date") dateFieldWrap = wrap;
   });
 
-  // If we rendered a date field, add "no date" toggle below it
+  // ===== "No document date" toggle (persistent + prefill) =====
   if (dateFieldWrap) {
     const dateInput = dateFieldWrap.querySelector('input[type="date"]');
     const noneCtrl = makeNoDateControl(dateInput.id);
     dateFieldWrap.after(noneCtrl);
 
     const noneCb = noneCtrl.querySelector('input[type="checkbox"]');
-    noneCb.checked = false;
+
+    // Load previously saved state
+    const prevNoDate = !!payload.defaults?.noDocDate;
+    noneCb.checked = prevNoDate;
 
     const syncDateState = () => {
       if (noneCb.checked) {
@@ -532,10 +544,12 @@ function openDocMetaModal(payload) {
         dateInput.disabled = true;
       } else {
         dateInput.disabled = false;
+        // value already set above from defaults; leave as-is
       }
     };
-    noneCb.addEventListener("change", syncDateState);
+    // Apply initial state & keep synced
     syncDateState();
+    noneCb.addEventListener("change", syncDateState);
   }
 
   docMetaErr.textContent = "";
@@ -668,7 +682,7 @@ function renderRow(p, totalCount, labels) {
   const strip = el("div", { className: "exhibit-strip" });
   const addBtn = el("button", { type: "button", className: "addExhibitsBtn", innerText: "+ Add exhibit(s)" });
 
-  // ✅ Accept PDFs AND images now
+  // Accept PDFs AND images
   const fileMulti = el("input", { type: "file", className: "fileMulti", accept: "application/pdf,image/*", multiple: true });
   fileMulti.hidden = true;
 
@@ -694,7 +708,7 @@ function renderRow(p, totalCount, labels) {
 
       const openEditor = () => { openDocMetaForFile(ex.fileId); };
 
-      // ✅ Make both label and filename clickable to re-open the metadata modal
+      // Make both label and filename clickable to re-open the metadata modal
       makeClickableSpan(labelSpan, openEditor);
       makeClickableSpan(nameSpan, openEditor);
 
@@ -746,7 +760,7 @@ function renderRow(p, totalCount, labels) {
     const files = Array.from(fileMulti.files || []);
     if (!files.length) return;
 
-    // ✅ Validate: allow PDFs and images
+    // Validate: allow PDFs and images
     const invalid = files.find(f => !(f.type === "application/pdf" || f.type.startsWith("image/")));
     if (invalid) { alert("Please attach PDF files or images only."); fileMulti.value = ""; return; }
 

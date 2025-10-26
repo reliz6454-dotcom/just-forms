@@ -1,5 +1,4 @@
-// affidavit-body.js — exhibits + paragraph editor + metadata intake (with self-rep guidance)
-
+// affidavit-body.js — exhibits + paragraph editor + metadata intake + RTE (with chip guards)
 import { LS, loadJSON, saveJSON, loadDocSchema, loadDocGuidance } from "./constants.js";
 
 /* ---------- DOM helpers ---------- */
@@ -46,10 +45,7 @@ const STORE   = "files";
 function openDB() {
   return new Promise((res, rej) => {
     const r = indexedDB.open(DB_NAME, 1);
-    r.onupgradeneeded = () => {
-      const db = r.result;
-      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id" });
-    };
+    r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id" }); };
     r.onsuccess = () => res(r.result);
     r.onerror   = () => rej(r.error);
   });
@@ -78,16 +74,10 @@ async function saveFileBlob(file) {
     const id = crypto.randomUUID();
     const tx = db.transaction(STORE, "readwrite");
     tx.objectStore(STORE).put({
-      id,
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      blob: file,
+      id, name: file.name, type: file.type, size: file.size, blob: file,
       uploadedAt: new Date().toISOString(),
       pageCount: null,
-      meta: {},         // user-supplied intake fields
-      system: {},       // linkage (affidavit/paragraph/exhibit)
-      tags: []
+      meta: {}, system: {}, tags: []
     });
     tx.oncomplete = () => res(id);
     tx.onerror    = () => rej(tx.error);
@@ -107,25 +97,129 @@ async function computePdfPageCountFromBlob(blob) {
     const pages = t.numPages || null;
     URL.revokeObjectURL(url);
     return pages;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 /* ---------- Utilities ---------- */
 const byNumber = (a, b) => (a.number || 0) - (b.number || 0);
+const stripGuards = (s) => (s || "").replace(/\u200B/g, ""); // remove zero-width spaces from text runs
+
+// --- Chip & edit helpers ---
+const isChipEl = (n) => n && n.nodeType === 1 && n.classList?.contains("exh-chip");
+
+const isDangerousInput = (t) =>
+  t && (
+    t.startsWith("delete") ||
+    t === "deleteByCut" ||
+    t === "insertFromPaste" ||
+    t === "insertFromDrop" ||
+    t === "insertReplacementText"
+  );
+
+// Selection contains a chip? (works well on Safari/Firefox)
+function rangeContainsChip(range) {
+  if (!range || range.collapsed) return false;
+  const frag = range.cloneContents?.();
+  if (!frag) return false;
+  const probe = document.createElement("div");
+  probe.appendChild(frag);
+  return !!probe.querySelector(".exh-chip");
+}
+
+// Trim a range so it excludes any chip elements; null if nothing left
+function trimRangeToAvoidChips(range, root) {
+  const r = range.cloneRange();
+
+  // Move start forward past any chip
+  while (true) {
+    const sc = r.startContainer, so = r.startOffset;
+    if (!root.contains(sc)) break;
+
+    if (sc.nodeType === Node.ELEMENT_NODE) {
+      const child = sc.childNodes[so] || null;
+      if (isChipEl(child)) {
+        const after = child.nextSibling;
+        if (!after) return null;
+        r.setStart(after, after.nodeType === Node.TEXT_NODE ? 0 : 0);
+        continue;
+      }
+    }
+    if (sc.nodeType === Node.ELEMENT_NODE && isChipEl(sc)) {
+      const after = sc.nextSibling;
+      if (!after) return null;
+      r.setStart(after, after.nodeType === Node.TEXT_NODE ? 0 : 0);
+      continue;
+    }
+    break;
+  }
+
+  // Move end backward before any chip
+  while (true) {
+    const ec = r.endContainer, eo = r.endOffset;
+    if (!root.contains(ec)) break;
+
+    if (ec.nodeType === Node.ELEMENT_NODE) {
+      const idx = eo - 1;
+      const child = ec.childNodes[idx] || null;
+      if (isChipEl(child)) {
+        const before = child.previousSibling;
+        if (!before) return null;
+        const len = before.nodeType === Node.TEXT_NODE ? (before.nodeValue || "").length : (before.childNodes?.length || 0);
+        r.setEnd(before, len);
+        continue;
+      }
+    }
+    if (ec.nodeType === Node.ELEMENT_NODE && isChipEl(ec)) {
+      const before = ec.previousSibling;
+      if (!before) return null;
+      const len = before.nodeType === Node.TEXT_NODE ? (before.nodeValue || "").length : (before.childNodes?.length || 0);
+      r.setEnd(before, len);
+      continue;
+    }
+    break;
+  }
+
+  return r.collapsed ? null : r;
+}
+
+// Clipboard fallback (for Safari, permissions edge cases)
+async function writePlainTextToClipboard(txt) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(txt);
+      return true;
+    }
+  } catch (_) {}
+  const ta = document.createElement("textarea");
+  ta.style.position = "fixed"; ta.style.opacity = "0";
+  ta.value = txt;
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand("copy"); } catch (_) {}
+  document.body.removeChild(ta);
+  return true;
+}
 
 /* ---------- Model helpers ---------- */
-const createParagraph = () => ({ id: crypto.randomUUID(), number: 0, text: "", exhibits: [], runs: [{ type: "text", text: "" }] });
+const createParagraph = () => ({
+  id: crypto.randomUUID(),
+  number: 0,
+  text: "",               // legacy plain text
+  html: "",               // sanitized rich text
+  exhibits: [],
+  runs: [{ type: "text", text: "" }] // legacy runs; kept for chips
+});
 function newParagraph() { const list = loadParas().sort(byNumber); const p = createParagraph(); p.number = list.length + 1; return p; }
 function renumber(list) { list.forEach((p, i) => { p.number = i + 1; }); return list; }
 function ensureRuns(p) {
   if (!p) return p;
-  if (Array.isArray(p.runs)) return p;
-  const baseText = (p.text || "");
-  const textRun = { type: "text", text: baseText };
-  const exRuns  = Array.isArray(p.exhibits) ? p.exhibits.map(ex => ({ type: "exhibit", exId: ex.id })) : [];
-  p.runs = [textRun, ...exRuns];
+  if (!Array.isArray(p.runs)) {
+    const baseText = (p.text || "");
+    const textRun = { type: "text", text: baseText };
+    const exRuns  = Array.isArray(p.exhibits) ? p.exhibits.map(ex => ({ type: "exhibit", exId: ex.id })) : [];
+    p.runs = [textRun, ...exRuns];
+  }
+  if (typeof p.html !== "string") p.html = "";
   return p;
 }
 
@@ -140,13 +234,11 @@ async function migrateParasIfNeeded() {
       p.exhibits = [{ id: crypto.randomUUID(), fileId: p.exhibitFileId, name }];
       delete p.exhibitFileId;
       changed = true;
-    } else if (p && !Array.isArray(p.exhibits)) {
-      p.exhibits = [];
-      changed = true;
-    }
+    } else if (p && !Array.isArray(p.exhibits)) { p.exhibits = []; changed = true; }
     const before = JSON.stringify(p.runs || null);
     ensureRuns(p);
     if (JSON.stringify(p.runs || null) !== before) changed = true;
+    if (typeof p.html !== "string") { p.html = ""; changed = true; }
   }
   if (changed) saveParas(list);
 }
@@ -239,80 +331,339 @@ function renderIntro() {
   intro.innerHTML = `<h2>Affidavit of ${fullName || ""}</h2><p class="mt-12">${parts.join(", ")}, ${oathText}</p>`;
 }
 
-/* ---------- Inline editor (runs <-> DOM chips) ---------- */
+/* ---------- Sanitizer (allow a tiny HTML subset) ---------- */
+function sanitizeHTML(inputHTML) {
+  const ALLOWED = new Set(["B","STRONG","I","EM","U","UL","OL","LI","BR","SPAN","#text"]);
+  const container = document.createElement("div");
+  container.innerHTML = inputHTML || "";
+
+  function clean(node) {
+    if (node.nodeType === Node.TEXT_NODE) return node.nodeValue;
+
+    const tag = node.tagName;
+    if (!ALLOWED.has(tag)) {
+      let buf = "";
+      node.childNodes.forEach(ch => { buf += clean(ch); });
+      return buf;
+    }
+
+    if (tag === "SPAN") {
+      const cls = node.classList;
+      if (!cls || !cls.contains("exh-chip")) {
+        let buf = "";
+        node.childNodes.forEach(ch => { buf += clean(ch); });
+        return buf;
+      }
+    }
+
+    let open = `<${tag.toLowerCase()}`;
+    if (tag === "SPAN" && node.classList.contains("exh-chip")) {
+      const exId = node.getAttribute("data-ex-id") || node.dataset.exId || "";
+      open += ` class="exh-chip" data-ex-id="${exId}" contenteditable="false"`;
+    }
+    if (tag === "OL") {
+      // persist style for Firefox/Safari by mirroring to attribute too
+      const lst = (node.getAttribute && node.getAttribute("data-list-style")) ||
+                  (node.style && node.style.listStyleType) || "";
+      if (lst) open += ` style="list-style-type:${lst}" data-list-style="${lst}"`;
+    }
+    open += ">";
+
+    let inner = "";
+    node.childNodes.forEach(ch => { inner += clean(ch); });
+    const close = `</${tag.toLowerCase()}>`;
+    return open + inner + close;
+  }
+
+  let out = "";
+  container.childNodes.forEach(ch => { out += clean(ch); });
+  return out;
+}
+
+/* ---------- Chips (+ caret guards) ---------- */
 function makeExhibitChip(exId, labelText) {
   const chip = document.createElement("span");
   chip.className = "exh-chip";
   chip.textContent = `exhibit "${labelText || "?"}"`;
   chip.setAttribute("data-ex-id", exId);
   chip.contentEditable = "false";
+  chip.setAttribute("draggable", "false");
+  chip.setAttribute("tabindex", "-1");
   return chip;
 }
-function renderEditorFromRuns(p, labels) {
+function makeChipWithGuards(exId, labelText) {
+  const leftGuard  = document.createTextNode("\u200B");
+  const chip       = makeExhibitChip(exId, labelText);
+  const rightGuard = document.createTextNode("\u200B");
+  return [leftGuard, chip, rightGuard];
+}
+function appendChipWithGuards(parent, exId, labelText) {
+  const trio = makeChipWithGuards(exId, labelText);
+  trio.forEach(n => parent.appendChild(n));
+}
+function ensureGuardsAroundChip(chip) {
+  const prev = chip.previousSibling;
+  const next = chip.nextSibling;
+  if (!(prev && prev.nodeType === Node.TEXT_NODE && prev.nodeValue?.includes("\u200B"))) {
+    chip.parentNode?.insertBefore(document.createTextNode("\u200B"), chip);
+  }
+  if (!(next && next.nodeType === Node.TEXT_NODE && next.nodeValue?.includes("\u200B"))) {
+    chip.parentNode?.insertBefore(document.createTextNode("\u200B"), chip.nextSibling);
+  }
+}
+
+/* ---------- Inline editor (runs <-> DOM chips + RTE) ---------- */
+function renderEditorFromParagraph(p, labels) {
   const ed = document.createElement("div");
   ed.className = "para-editor";
   ed.contentEditable = "true";
   ed.setAttribute("data-paragraph-id", p.id);
-  const runs = Array.isArray(p.runs) ? p.runs : [{ type: "text", text: p.text || "" }];
-  for (const r of runs) {
-    if (r?.type === "text") ed.append(document.createTextNode(r.text || ""));
-    else if (r?.type === "exhibit" && r.exId) {
-      const lab = labels?.get(r.exId) || "?";
-      ed.append(makeExhibitChip(r.exId, lab));
+
+  if (p.html) {
+    ed.innerHTML = p.html;
+  } else {
+    const runs = Array.isArray(p.runs) ? p.runs : [{ type: "text", text: p.text || "" }];
+    for (const r of runs) {
+      if (r?.type === "text") ed.append(document.createTextNode(r.text || ""));
+      else if (r?.type === "exhibit" && r.exId) {
+        const lab = labels?.get(r.exId) || "?";
+        appendChipWithGuards(ed, r.exId, lab);
+      }
     }
+    if (!ed.firstChild) ed.append(document.createTextNode(""));
   }
-  if (!ed.firstChild) ed.append(document.createTextNode(""));
+
+  // Refresh chip labels + ensure guards exist
+  ed.querySelectorAll(".exh-chip").forEach(ch => {
+    const exId = ch.getAttribute("data-ex-id");
+    const lab  = exId ? (labels.get(exId) || "?") : "?";
+    ch.textContent = `exhibit "${lab}"`;
+    ch.contentEditable = "false";
+    ch.setAttribute("draggable", "false");
+    ensureGuardsAroundChip(ch);
+  });
+
   return ed;
 }
 function collectRunsFromEditor(editorEl) {
   const out = [];
   const pushText = (txt) => {
-    if (!txt) return;
+    const cleaned = stripGuards(txt);
+    if (!cleaned) return;
     const last = out[out.length - 1];
-    if (last && last.type === "text") last.text += txt;
-    else out.push({ type: "text", text: txt });
+    if (last && last.type === "text") last.text += cleaned;
+    else out.push({ type: "text", text: cleaned });
   };
+
   for (const node of editorEl.childNodes) {
-    if (node.nodeType === Node.TEXT_NODE) pushText(node.nodeValue || "");
-    else if (node.nodeType === Node.ELEMENT_NODE) {
-      const el = node;
-      if (el.classList.contains("exh-chip")) {
-        const exId = el.getAttribute("data-ex-id") || el.dataset.exId || "";
+    if (node.nodeType === Node.TEXT_NODE) { pushText(node.nodeValue || ""); continue; }
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const elx = node;
+      if (elx.classList.contains("exh-chip")) {
+        const exId = elx.getAttribute("data-ex-id") || elx.dataset.exId || "";
         if (exId) out.push({ type: "exhibit", exId });
-      } else pushText(el.textContent || "");
+      } else {
+        const walker = document.createTreeWalker(elx, NodeFilter.SHOW_ALL, null);
+        let n, buf = "";
+        while ((n = walker.nextNode())) {
+          if (n.nodeType === Node.TEXT_NODE) buf += n.nodeValue || "";
+          if (n.nodeType === Node.ELEMENT_NODE && n.classList?.contains("exh-chip")) {
+            const id = n.getAttribute("data-ex-id") || n.dataset.exId || "";
+            if (id) out.push({ type: "exhibit", exId: id });
+          }
+        }
+        pushText(buf);
+      }
     }
   }
   return out;
 }
-function protectChips(editorEl) {
-  editorEl.querySelectorAll(".exh-chip").forEach(ch => { ch.contentEditable = "false"; });
-  editorEl.addEventListener("keydown", (e) => {
-    if (e.key !== "Backspace" && e.key !== "Delete") return;
-    const sel = window.getSelection();
-    if (!sel || !sel.anchorNode || !sel.isCollapsed) return;
-    const container = sel.anchorNode, offset = sel.anchorOffset;
-    const neighborChip = (dir) => {
-      let n = container;
-      if (n.nodeType === Node.TEXT_NODE) {
-        if (dir < 0 && offset === 0) {
-          let prev = n.previousSibling;
-          while (prev && prev.nodeType === Node.TEXT_NODE && (prev.nodeValue || "") === "") prev = prev.previousSibling;
-          return (prev && prev.nodeType === Node.ELEMENT_NODE && prev.classList?.contains("exh-chip")) ? prev : null;
-        }
-        if (dir > 0 && offset === (n.nodeValue || "").length) {
-          let next = n.nextSibling;
-          while (next && next.nodeType === Node.TEXT_NODE && (next.nodeValue || "") === "") next = next.nextSibling;
-          return (next && next.nodeType === Node.ELEMENT_NODE && next.classList?.contains("exh-chip")) ? next : null;
-        }
-      } else if (n.nodeType === Node.ELEMENT_NODE) {
-        const el = n;
-        if (el.classList.contains("exh-chip")) return el;
+
+/* === Chip protection (permissive: protect chips, allow text edits) === */
+function protectChips(editor) {
+  // IME/mobile composition guard
+  let _isComposing = false;
+  editor.addEventListener("compositionstart", () => { _isComposing = true; });
+  editor.addEventListener("compositionend",   () => { _isComposing = false; });
+
+  // Clicking a chip puts caret after right guard
+  editor.addEventListener("mousedown", (e) => {
+    const t = e.target;
+    if (isChipEl(t)) {
+      e.preventDefault();
+      ensureGuardsAroundChip(t);
+      const rightGuard = t.nextSibling;
+      const r = document.createRange();
+      if (rightGuard && rightGuard.nodeType === Node.TEXT_NODE) {
+        r.setStart(rightGuard, rightGuard.nodeValue.length);
+      } else {
+        const guard = document.createTextNode("\u200B");
+        t.parentNode?.insertBefore(guard, t.nextSibling);
+        r.setStart(guard, 1);
       }
-      return null;
-    };
-    if (e.key === "Backspace" && neighborChip(-1)) { e.preventDefault(); }
-    if (e.key === "Delete"    && neighborChip(+1)) { e.preventDefault(); }
+      r.collapse(true);
+      const sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(r);
+    }
   });
+
+  // Allow edits, but never delete/overwrite chip elements
+  editor.addEventListener("beforeinput", (e) => {
+    if (_isComposing) return;
+    const t = e.inputType || "";
+    if (!isDangerousInput(t)) return;
+
+    const sel = document.getSelection?.();
+    if (!sel || sel.rangeCount === 0) return;
+    const r = sel.getRangeAt(0);
+
+    // Non-collapsed: trim around chips and perform operation only on text
+    if (!r.collapsed) {
+      if (rangeContainsChip(r)) {
+        e.preventDefault(); e.stopPropagation();
+        const safe = trimRangeToAvoidChips(r, editor);
+        if (!safe) return; // selection was only chips
+        sel.removeAllRanges(); sel.addRange(safe);
+        if (t.startsWith("delete") || t === "deleteByCut" || t === "insertReplacementText") {
+          document.execCommand("delete", false, null);
+        }
+      }
+      return;
+    }
+
+    // Collapsed: block deletion that would target chip siblings
+    const sc = r.startContainer, so = r.startOffset;
+    const neighborAt = (container, offset, dir) => {
+      if (container.nodeType === Node.TEXT_NODE) {
+        return dir < 0 ? container.previousSibling : container.nextSibling;
+      }
+      return container.childNodes[offset + (dir < 0 ? -1 : 0)] || null;
+    };
+
+    const leftNode  = neighborAt(sc, so, -1);
+    const rightNode = neighborAt(sc, so, +1);
+
+    const deletingBackward = t === "deleteContentBackward" || t === "deleteWordBackward" || t === "deleteSoftLineBackward";
+    const deletingForward  = t === "deleteContentForward"  || t === "deleteWordForward"  || t === "deleteHardLineForward";
+
+    // If in the middle of a text node, allow normal deletion
+    if (sc.nodeType === Node.TEXT_NODE) {
+      if (deletingBackward && so > 0) return;
+      if (deletingForward  && so < (sc.nodeValue || "").length) return;
+    }
+
+    if ((deletingBackward && isChipEl(leftNode)) || (deletingForward && isChipEl(rightNode))) {
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
+  });
+
+  // Ctrl/Cmd+X: if selection overlaps chips, cut only text portion
+  editor.addEventListener("keydown", async (e) => {
+    const sel = window.getSelection?.();
+    const isMac = navigator.platform.toUpperCase().includes("MAC");
+    const modX = (isMac ? e.metaKey : e.ctrlKey) && e.key.toLowerCase() === "x";
+    if (!modX || !sel || sel.rangeCount === 0) return;
+
+    const r = sel.getRangeAt(0);
+    if (r.collapsed || !rangeContainsChip(r)) return;
+
+    e.preventDefault(); e.stopPropagation();
+    const safe = trimRangeToAvoidChips(r, editor);
+    if (!safe) return;
+
+    const probe = document.createElement("div");
+    probe.appendChild(safe.cloneContents());
+    const txt = probe.textContent || "";
+    await writePlainTextToClipboard(txt);
+
+    sel.removeAllRanges(); sel.addRange(safe);
+    document.execCommand("delete", false, null);
+  });
+
+  // Plain-text paste; if overlaps chips, paste into trimmed range
+  editor.addEventListener("paste", (e) => {
+    const sel = window.getSelection?.();
+    if (!sel || sel.rangeCount === 0) return;
+    const r = sel.getRangeAt(0);
+
+    const text = (e.clipboardData?.getData("text/plain") || "").replace(/\r\n?/g, "\n");
+    e.preventDefault();
+
+    if (!r.collapsed && rangeContainsChip(r)) {
+      const safe = trimRangeToAvoidChips(r, editor);
+      if (!safe) return;
+      sel.removeAllRanges(); sel.addRange(safe);
+    }
+    document.execCommand("insertText", false, text);
+  });
+
+  // Prevent dragging chips
+  editor.addEventListener("dragstart", (e) => { if (isChipEl(e.target)) e.preventDefault(); });
+
+  // Re-assert guards; keep editor from becoming empty
+  const mo = new MutationObserver(() => {
+    editor.querySelectorAll(".exh-chip").forEach(ensureGuardsAroundChip);
+    if (editor.childNodes.length === 0) editor.append(document.createTextNode(""));
+  });
+  mo.observe(editor, { childList: true, subtree: true, characterData: true });
+}
+
+/* ---------- RTE toolbar helpers ---------- */
+function buildRteToolbar() {
+  const tb = el("div", { className: "rte-toolbar" });
+  const btn = (label, cmd, title) => el("button", { type: "button", innerText: label, title: title || label, dataset: { cmd } });
+  const styleSel = el("select", { title: "Numbering style", dataset: { action: "listStyle" } },
+    el("option", { value: "decimal", innerText: "1." }),
+    el("option", { value: "lower-alpha", innerText: "a." }),
+    el("option", { value: "lower-roman", innerText: "i." }),
+  );
+  tb.append(
+    btn("B", "bold", "Bold (Cmd/Ctrl+B)"),
+    btn("I", "italic", "Italic (Cmd/Ctrl+I)"),
+    btn("U", "underline", "Underline (Cmd/Ctrl+U)"),
+    el("span", { className: "sep" }),
+    btn("•", "insertUnorderedList", "Bulleted list"),
+    btn("1.", "insertOrderedList", "Numbered list"),
+    styleSel,
+    el("span", { className: "sep" }),
+    btn("→", "indent", "Indent"),
+    btn("←", "outdent", "Outdent"),
+    el("span", { className: "sep" }),
+    btn("Clear", "removeFormat", "Clear direct formatting")
+  );
+  return tb;
+}
+function getActiveEditor(toolbar) {
+  let ed = toolbar?.nextElementSibling;
+  if (ed && ed.classList.contains("para-editor")) return ed;
+  return null;
+}
+function execOnEditor(ed, cmd, value = null) {
+  if (!ed) return;
+  ed.focus();
+  document.execCommand(cmd, false, value);
+}
+
+/* Apply list style to the nearest <ol> ancestor of the selection */
+function applyListStyle(ed, styleType) {
+  if (!ed) return;
+  ed.focus();
+  document.execCommand("insertOrderedList");
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  let node = sel.anchorNode;
+  if (node && node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+  const ol = node ? node.closest("ol") : null;
+  if (ol) { ol.style.listStyleType = styleType; ol.setAttribute("data-list-style", styleType); }
+}
+
+/* Save editor HTML (sanitized) + runs(chips) to model */
+function persistEditor(p, ed) {
+  const raw = ed.innerHTML;
+  const clean = sanitizeHTML(raw);
+  const runs = collectRunsFromEditor(ed);
+  upsertParagraph({ id: p.id, html: clean, runs });
 }
 
 /* ---------- Paragraph CRUD & reorder ---------- */
@@ -332,7 +683,7 @@ const insertNewBelow = (n) => { pushHistory(); insertNewAt(n + 1); };
 function upsertParagraph(patch) { pushHistory(); const list = loadParas().sort(byNumber); const i = list.findIndex(x => x.id === patch.id); if (i === -1) list.push(patch); else list[i] = { ...list[i], ...patch }; saveParas(renumber(list)); }
 function removeParagraph(id) { pushHistory(); const list = loadParas().filter(p => p.id !== id).sort(byNumber); saveParas(renumber(list)); }
 
-/* ---------- Exhibit mutations ---------- */
+/* ---------- Exhibit mutations (with guards) ---------- */
 function addExhibits(pId, entries) {
   pushHistory();
   const list = loadParas().sort(byNumber);
@@ -347,6 +698,13 @@ function addExhibits(pId, entries) {
     newExIds.push(exId);
   }
   for (const exId of newExIds) p.runs.push({ type: "exhibit", exId });
+
+  if (typeof p.html === "string" && p.html.trim()) {
+    const tmp = document.createElement("div");
+    tmp.innerHTML = p.html;
+    newExIds.forEach(exId => appendChipWithGuards(tmp, exId, "?"));
+    p.html = sanitizeHTML(tmp.innerHTML);
+  }
   saveParas(renumber(list));
 }
 function moveExhibit(pId, exId, dir) {
@@ -361,14 +719,53 @@ function moveExhibit(pId, exId, dir) {
   const swapWith = idx + dir;
   if (swapWith < 0 || swapWith >= exs.length) { saveParas(renumber(list)); return; }
   [exs[idx], exs[swapWith]] = [exs[swapWith], exs[idx]];
-  const rIdx = p.runs.findIndex(r => r.type === "exhibit" && r.exId === exId);
-  if (rIdx !== -1) {
-    let j = rIdx + dir;
-    while (j >= 0 && j < p.runs.length && p.runs[j].type !== "exhibit") j += dir;
-    if (j >= 0 && j < p.runs.length && p.runs[j].type === "exhibit") {
-      [p.runs[rIdx], p.runs[j]] = [p.runs[j], p.runs[rIdx]];
+
+  // Reorder chip + its guards in HTML to mirror change
+  if (typeof p.html === "string" && p.html) {
+    const tmp = document.createElement("div");
+    tmp.innerHTML = p.html;
+    const chip = tmp.querySelector(`.exh-chip[data-ex-id="${exId}"]`);
+    if (chip && chip.parentNode) {
+      const parent = chip.parentNode;
+      const leftGuard  = chip.previousSibling && chip.previousSibling.nodeType === Node.TEXT_NODE && chip.previousSibling.nodeValue?.includes("\u200B") ? chip.previousSibling : null;
+      const rightGuard = chip.nextSibling     && chip.nextSibling.nodeType === Node.TEXT_NODE && chip.nextSibling.nodeValue?.includes("\u200B") ? chip.nextSibling : null;
+
+      // group nodes to move
+      const group = [leftGuard, chip, rightGuard].filter(Boolean);
+
+      // find target anchor: skip across text nodes to find next/prev element/text
+      const siblings = Array.from(parent.childNodes);
+      const curFirst = group[0] || chip;
+      const curIdx = siblings.indexOf(curFirst);
+      let targetIdx = curIdx;
+
+      // Move by one logical step
+      if (dir > 0) {
+        // move after the node just after the group
+        const afterGroup = siblings[curIdx + group.length] || null;
+        if (afterGroup) {
+          targetIdx = siblings.indexOf(afterGroup) + 1;
+        } else {
+          targetIdx = siblings.length;
+        }
+      } else {
+        // move before the node just before the group
+        const beforeGroup = siblings[curIdx - 1] || null;
+        if (beforeGroup) {
+          targetIdx = siblings.indexOf(beforeGroup);
+        } else {
+          targetIdx = 0;
+        }
+      }
+
+      // Remove group and re-insert at targetIdx
+      group.forEach(n => parent.removeChild(n));
+      const ref = parent.childNodes[targetIdx] || null;
+      group.forEach(n => parent.insertBefore(n, ref));
     }
+    p.html = sanitizeHTML(tmp.innerHTML);
   }
+
   saveParas(renumber(list));
 }
 function removeExhibit(pId, exId) {
@@ -379,6 +776,19 @@ function removeExhibit(pId, exId) {
   const p = ensureRuns(list[i]);
   p.exhibits = (p.exhibits || []).filter(x => x.id !== exId);
   p.runs = (p.runs || []).filter(r => !(r.type === "exhibit" && r.exId === exId));
+  if (typeof p.html === "string" && p.html) {
+    const tmp = document.createElement("div");
+    tmp.innerHTML = p.html;
+    const chip = tmp.querySelector(`.exh-chip[data-ex-id="${exId}"]`);
+    if (chip) {
+      const left  = chip.previousSibling;
+      const right = chip.nextSibling;
+      if (left && left.nodeType === Node.TEXT_NODE && left.nodeValue?.includes("\u200B")) left.remove();
+      chip.remove();
+      if (right && right.nodeType === Node.TEXT_NODE && right.nodeValue?.includes("\u200B")) right.remove();
+    }
+    p.html = sanitizeHTML(tmp.innerHTML);
+  }
   saveParas(renumber(list));
 }
 
@@ -397,32 +807,18 @@ function findExhibitLocationByFileId(fileId) {
   return null;
 }
 
-/* ---------- Document Intake Modal (guidance + schema-driven form) ---------- */
+/* ---------- Document Intake Modal ---------- */
 let docMetaModal, docMetaForm, docMetaErr, docMetaSave, docMetaGuidance;
-
 let _pendingMetaQueue = []; // [{fileId, defaults}]
 let _currentMeta      = null;
-
-/* NEW: focus trap + background lock */
 let _lastFocused = null;
-function lockBackground() {
-  document.body.dataset._scrollY = String(window.scrollY || 0);
-  document.body.style.top = `-${document.body.dataset._scrollY}px`;
-  document.body.style.position = "fixed";
-  document.body.style.width = "100%";
-}
-function unlockBackground() {
-  const y = Number(document.body.dataset._scrollY || 0);
-  document.body.style.position = "";
-  document.body.style.top = "";
-  document.body.style.width = "";
-  window.scrollTo(0, y);
-}
+function lockBackground() { document.body.dataset._scrollY = String(window.scrollY || 0); document.body.style.top = `-${document.body.dataset._scrollY}px`; document.body.style.position = "fixed"; document.body.style.width = "100%"; }
+function unlockBackground() { const y = Number(document.body.dataset._scrollY || 0); document.body.style.position = ""; document.body.style.top = ""; document.body.style.width = ""; window.scrollTo(0, y); }
 function trapFocus(modalEl) {
   const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
   const nodes = () => Array.from(modalEl.querySelectorAll(FOCUSABLE)).filter(n => !n.hasAttribute("disabled"));
   function onKey(e) {
-    if (e.key === "Escape") { e.preventDefault(); /* NEW: block ESC close */ return; }
+    if (e.key === "Escape") { e.preventDefault(); return; }
     if (e.key !== "Tab") return;
     const list = nodes(); if (!list.length) return;
     const first = list[0], last = list[list.length - 1];
@@ -432,8 +828,6 @@ function trapFocus(modalEl) {
   modalEl.addEventListener("keydown", onKey);
   modalEl._removeTrap = () => modalEl.removeEventListener("keydown", onKey);
 }
-
-/* ---------- Guidance block ---------- */
 function renderGuidanceBlock() {
   const g = loadDocGuidance();
   docMetaGuidance.innerHTML = "";
@@ -445,37 +839,25 @@ function renderGuidanceBlock() {
   g.examples.forEach(txt => list.append(el("li", { innerText: txt })));
   docMetaGuidance.append(title, p1, p2, exH, list);
 }
-
 function makeNoDateControl(forInputId) {
   const wrap = document.createElement("div");
   wrap.className = "field";
   const id = forInputId + "-none";
   const cb = document.createElement("input");
-  cb.type = "checkbox";
-  cb.id = id;
-  cb.ariaLabel = "This document has no date";
-  const label = document.createElement("label");
-  label.htmlFor = id;
-  label.textContent = "This document has no date";
+  cb.type = "checkbox"; cb.id = id; cb.ariaLabel = "This document has no date";
+  const label = document.createElement("label"); label.htmlFor = id; label.textContent = "This document has no date";
   wrap.append(cb, label);
   return wrap;
 }
-
-/* NEW: open meta for an existing file to edit */
 async function openDocMetaForFile(fileId) {
   const rec = await readDoc(fileId);
   const defaults = rec?.meta || {};
   openDocMetaModal({ fileId, defaults });
 }
-
 function openDocMetaModal(payload) {
-  _currentMeta = payload; // { fileId, defaults }
-  const schema = loadDocSchema();
-  const guidance = loadDocGuidance();
-
+  _currentMeta = payload;
+  const schema = loadDocSchema(); const guidance = loadDocGuidance();
   renderGuidanceBlock();
-
-  // Build form
   docMetaForm.innerHTML = "";
   let dateFieldWrap = null;
 
@@ -484,30 +866,20 @@ function openDocMetaModal(payload) {
     const id = `docmeta-${field.key}`;
     const labelText = field.label + (field.required ? " *" : "");
     const label = el("label", { htmlFor: id, innerText: labelText });
-
     let input;
     const value = payload.defaults?.[field.key] ?? "";
-
     switch (field.type) {
       case "textarea": {
         const ex = Array.isArray(guidance.examples) ? guidance.examples.slice(0, 3) : [];
-        const placeholder =
-          ex.length
-            ? `e.g., ${ex[0]}\n• ${ex[1] || ""}\n• ${ex[2] || ""}`.trim()
-            : "e.g., Email from Jane Smith re: delivery delay";
+        const placeholder = ex.length ? `e.g., ${ex[0]}\n• ${ex[1] || ""}\n• ${ex[2] || ""}`.trim() : "e.g., Email from Jane Smith re: delivery delay";
         input = el("textarea", { id, value, placeholder });
         break;
       }
       case "select": {
         input = el("select", { id });
         const choices = field.choices || [];
-        choices.forEach(opt =>
-          input.append(el("option", { value: opt, innerText: opt }))
-        );
-        // Robust prefill: if saved value isn't in the list, show it anyway
-        if (value && !choices.includes(value)) {
-          input.append(el("option", { value, innerText: value }));
-        }
+        choices.forEach(opt => input.append(el("option", { value: opt, innerText: opt })));
+        if (value && !choices.includes(value)) input.append(el("option", { value, innerText: value }));
         if (value) input.value = value;
         break;
       }
@@ -519,42 +891,22 @@ function openDocMetaModal(payload) {
         input = el("input", { id, type: "text", value });
       }
     }
-
     wrap.append(label, input);
     docMetaForm.append(wrap);
-
     if (field.type === "date") dateFieldWrap = wrap;
   });
 
-  // ===== "No document date" toggle (persistent + prefill) =====
   if (dateFieldWrap) {
     const dateInput = dateFieldWrap.querySelector('input[type="date"]');
     const noneCtrl = makeNoDateControl(dateInput.id);
     dateFieldWrap.after(noneCtrl);
-
     const noneCb = noneCtrl.querySelector('input[type="checkbox"]');
-
-    // Load previously saved state
-    const prevNoDate = !!payload.defaults?.noDocDate;
-    noneCb.checked = prevNoDate;
-
-    const syncDateState = () => {
-      if (noneCb.checked) {
-        dateInput.value = "";
-        dateInput.disabled = true;
-      } else {
-        dateInput.disabled = false;
-        // value already set above from defaults; leave as-is
-      }
-    };
-    // Apply initial state & keep synced
-    syncDateState();
-    noneCb.addEventListener("change", syncDateState);
+    const prevNoDate = !!payload.defaults?.noDocDate; noneCb.checked = prevNoDate;
+    const syncDateState = () => { if (noneCb.checked) { dateInput.value = ""; dateInput.disabled = true; } else { dateInput.disabled = false; } };
+    syncDateState(); noneCb.addEventListener("change", syncDateState);
   }
 
   docMetaErr.textContent = "";
-
-  // NEW: make truly blocking
   _lastFocused = document.activeElement;
   lockBackground();
   docMetaModal.setAttribute("aria-hidden", "false");
@@ -562,7 +914,6 @@ function openDocMetaModal(payload) {
   const firstInput = docMetaForm.querySelector("textarea, input, select, button");
   (firstInput || docMetaSave)?.focus();
 }
-
 function closeDocMetaModal() {
   docMetaModal.setAttribute("aria-hidden", "true");
   if (typeof docMetaModal._removeTrap === "function") docMetaModal._removeTrap();
@@ -570,68 +921,36 @@ function closeDocMetaModal() {
   if (_lastFocused) { try { _lastFocused.focus(); } catch {} }
   _currentMeta = null;
 }
-
 async function saveDocMeta(fileId, meta) {
   const rec = await readDoc(fileId);
   if (!rec) return;
   const link = findExhibitLocationByFileId(fileId);
   const affidavitId = localStorage.getItem(LS.AFFIDAVIT_ID) || null;
-
-  // Merge user meta (includes shortDesc, docDate?, docType, noDocDate flag)
   rec.meta = { ...(rec.meta || {}), ...meta };
-
-  // System linkage
-  rec.system = {
-    ...(rec.system || {}),
-    attachedTo: "affidavit",
-    affidavitId,
-    paragraphId: link?.paragraphId || null,
-    paragraphNo: link?.paragraphNo ?? null,
-    exhibitId: link?.exhibitId || null
-  };
-
-  if (rec.pageCount == null && rec.type === "application/pdf" && rec.blob) {
-    rec.pageCount = await computePdfPageCountFromBlob(rec.blob);
-  }
+  rec.system = { ...(rec.system || {}), attachedTo: "affidavit", affidavitId, paragraphId: link?.paragraphId || null, paragraphNo: link?.paragraphNo ?? null, exhibitId: link?.exhibitId || null };
+  if (rec.pageCount == null && rec.type === "application/pdf" && rec.blob) { rec.pageCount = await computePdfPageCountFromBlob(rec.blob); }
   await writeDoc(rec);
 }
-
 function validateDocMetaFromForm() {
   const schema = loadDocSchema();
-  const out = {};
-  let noDate = false;
-
+  const out = {}; let noDate = false;
   for (const field of schema) {
-    const elmt = document.getElementById(`docmeta-${field.key}`);
-    if (!elmt) continue;
-
+    const elmt = document.getElementById(`docmeta-${field.key}`); if (!elmt) continue;
     let v = (elmt.value || "").trim();
-
-    if (field.type === "date") {
-      const noneCb = document.getElementById(`${elmt.id}-none`);
-      noDate = !!(noneCb && noneCb.checked);
-      if (noDate) v = ""; // force empty when "no date" is checked
-    }
-
+    if (field.type === "date") { const noneCb = document.getElementById(`${elmt.id}-none`); noDate = !!(noneCb && noneCb.checked); if (noDate) v = ""; }
     if (field.required && !v) return { ok: false, message: `Please provide: ${field.label}.` };
     out[field.key] = v;
   }
-
-  // Require either a document date value or "This document has no date"
   const dateEl = document.getElementById("docmeta-docDate");
   if (dateEl) {
     const noneCb = document.getElementById(`${dateEl.id}-none`);
     const hasDate = !dateEl.disabled && (dateEl.value || "").trim();
     const noDateChecked = !!(noneCb && noneCb.checked);
-    if (!hasDate && !noDateChecked) {
-      return { ok: false, message: 'Please enter a document date or check “This document has no date”.' };
-    }
+    if (!hasDate && !noDateChecked) return { ok: false, message: 'Please enter a document date or check “This document has no date”.' };
   }
-
   out.noDocDate = noDate;
   return { ok: true, data: out };
 }
-
 async function handleDocMetaSave() {
   if (!_currentMeta) return;
   const v = validateDocMetaFromForm();
@@ -640,15 +959,13 @@ async function handleDocMetaSave() {
   closeDocMetaModal();
   processNextMetaInQueue();
 }
-
-/* Queue driver */
 function processNextMetaInQueue() {
   if (_pendingMetaQueue.length === 0) return;
   const next = _pendingMetaQueue.shift();
   openDocMetaModal(next);
 }
 
-/* ---------- Row rendering ---------- */
+/* ---------- Row rendering (adds toolbar) ---------- */
 function renderRow(p, totalCount, labels) {
   const row = el("div", { className: "row" });
 
@@ -675,26 +992,69 @@ function renderRow(p, totalCount, labels) {
   const mid = el("div", { className: "row-text" });
   const textLbl = el("label", { innerText: "Paragraph text" });
 
-  const editor = renderEditorFromRuns(p, labels);
+  // RTE toolbar + editor
+  const toolbar = buildRteToolbar();
+  const editor = renderEditorFromParagraph(p, labels);
   protectChips(editor);
+
+  // Toolbar wiring
+  toolbar.addEventListener("click", (e) => {
+    const target = e.target;
+    if (!(target instanceof HTMLElement)) return;
+    const cmd = target.dataset?.cmd;
+    if (!cmd) return;
+
+    const ed = getActiveEditor(toolbar);
+    if (!ed) return;
+
+    if (cmd === "insertOrderedList") {
+      execOnEditor(ed, "insertOrderedList");
+    } else if (cmd === "insertUnorderedList") {
+      execOnEditor(ed, "insertUnorderedList");
+    } else {
+      execOnEditor(ed, cmd);
+    }
+
+    persistEditor(p, ed);
+    syncUndoRedoButtons();
+  });
+
+  // List style selector
+  const styleSel = toolbar.querySelector('select[data-action="listStyle"]');
+  styleSel.addEventListener("change", () => {
+    const ed = getActiveEditor(toolbar);
+    applyListStyle(ed, styleSel.value);
+    persistEditor(p, ed);
+    syncUndoRedoButtons();
+  });
+
+  // Keyboard shortcuts (B/I/U)
+  editor.addEventListener("keydown", (e) => {
+    const isMac = navigator.platform.toUpperCase().includes("MAC");
+    const mod = isMac ? e.metaKey : e.ctrlKey;
+    if (!mod) return;
+    if (["b","i","u"].includes(e.key.toLowerCase())) e.preventDefault();
+    const map = { b: "bold", i: "italic", u: "underline" };
+    const cmd = map[e.key.toLowerCase()];
+    if (cmd) {
+      execOnEditor(editor, cmd);
+      persistEditor(p, editor);
+      syncUndoRedoButtons();
+    }
+  });
 
   // Exhibit strip
   const strip = el("div", { className: "exhibit-strip" });
   const addBtn = el("button", { type: "button", className: "addExhibitsBtn", innerText: "+ Add exhibit(s)" });
-
-  // Accept PDFs AND images
   const fileMulti = el("input", { type: "file", className: "fileMulti", accept: "application/pdf,image/*", multiple: true });
   fileMulti.hidden = true;
-
   strip.append(addBtn, fileMulti);
 
   function makeClickableSpan(span, onOpen) {
     span.classList.add("clickable");
     span.tabIndex = 0;
     span.addEventListener("click", onOpen);
-    span.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); }
-    });
+    span.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } });
   }
 
   function renderExhibitChipsRail() {
@@ -707,8 +1067,6 @@ function renderRow(p, totalCount, labels) {
       const nameSpan  = el("span", { className: "exhibit-name", innerText: `• ${ex.name || "Exhibit"}`, title: "Edit exhibit details" });
 
       const openEditor = () => { openDocMetaForFile(ex.fileId); };
-
-      // Make both label and filename clickable to re-open the metadata modal
       makeClickableSpan(labelSpan, openEditor);
       makeClickableSpan(nameSpan, openEditor);
 
@@ -716,7 +1074,6 @@ function renderRow(p, totalCount, labels) {
       const leftBtn   = el("button", { type: "button", className: "ex-left",  innerText: "←", title: "Move exhibit left" });
       const rightBtn  = el("button", { type: "button", className: "ex-right", innerText: "→", title: "Move exhibit right" });
       const editBtn   = el("button", { type: "button", className: "ex-edit",  innerText: "Edit", title: "Edit description/date/type" });
-      const xBtn      = el("button", { type: "button", className: "ex-remove", innerText: "✕", title: "Remove exhibit" });
 
       if (idx === 0) leftBtn.disabled = true;
       if (idx === (p.exhibits.length - 1)) rightBtn.disabled = true;
@@ -724,18 +1081,17 @@ function renderRow(p, totalCount, labels) {
       leftBtn.onclick  = () => { moveExhibit(p.id, ex.id, -1); renderParagraphs(); };
       rightBtn.onclick = () => { moveExhibit(p.id, ex.id, +1); renderParagraphs(); };
       editBtn.onclick  = openEditor;
-      xBtn.onclick     = () => { if (confirm("Remove this exhibit?")) { removeExhibit(p.id, ex.id); renderParagraphs(); } };
 
-      actions.append(leftBtn, rightBtn, editBtn, xBtn);
+      actions.append(leftBtn, rightBtn, editBtn);
       chip.append(labelSpan, nameSpan, actions);
       strip.insertBefore(chip, addBtn);
     });
   }
   renderExhibitChipsRail();
 
+  // Save on input (with sanitization)
   editor.addEventListener("input", () => {
-    const runs = collectRunsFromEditor(editor);
-    upsertParagraph({ id: p.id, runs });
+    persistEditor(p, editor);
     syncUndoRedoButtons();
   });
 
@@ -760,7 +1116,6 @@ function renderRow(p, totalCount, labels) {
     const files = Array.from(fileMulti.files || []);
     if (!files.length) return;
 
-    // Validate: allow PDFs and images
     const invalid = files.find(f => !(f.type === "application/pdf" || f.type.startsWith("image/")));
     if (invalid) { alert("Please attach PDF files or images only."); fileMulti.value = ""; return; }
 
@@ -769,8 +1124,6 @@ function renderRow(p, totalCount, labels) {
       for (const f of files) {
         const fileId = await saveFileBlob(f);
         entries.push({ fileId, name: f.name });
-
-        // Prefill: short description from file name; try to guess a date
         _pendingMetaQueue.push({
           fileId,
           defaults: {
@@ -782,10 +1135,7 @@ function renderRow(p, totalCount, labels) {
       addExhibits(p.id, entries);
       renderParagraphs();
 
-      // Always open the first pending meta modal; user cannot dismiss until Save
-      if (docMetaModal?.getAttribute("aria-hidden") !== "false") {
-        processNextMetaInQueue();
-      }
+      if (docMetaModal?.getAttribute("aria-hidden") !== "false") processNextMetaInQueue();
     } catch (e) {
       console.error("Exhibit save failed:", e);
       alert("Could not save one of the selected files. Please try again.");
@@ -793,7 +1143,7 @@ function renderRow(p, totalCount, labels) {
     fileMulti.value = "";
   };
 
-  mid.append(textLbl, editor, strip);
+  mid.append(textLbl, toolbar, editor, strip);
 
   // Right column (spacer)
   const right = el("div", { className: "row-file" });
@@ -801,10 +1151,10 @@ function renderRow(p, totalCount, labels) {
   return row;
 }
 
-/* ---------- Paragraph list UI (ultra-defensive/best practice) ---------- */
+/* ---------- Paragraph list UI ---------- */
 function renderParagraphs() {
   const container = document.querySelector("#paraList");
-  if (!container) return; // safely no-op if DOM not ready or removed
+  if (!container) return;
 
   const list = loadParas().sort(byNumber).map(ensureRuns);
   const labels = computeExhibitLabels(list);
@@ -854,10 +1204,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
   }
-
   if (docMetaSave) docMetaSave.onclick = handleDocMetaSave;
 
-  // Migrate & render
   await migrateParasIfNeeded();
   renderHeading();
   renderIntro();

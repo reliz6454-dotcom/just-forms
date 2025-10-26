@@ -1,14 +1,4 @@
-<!--
-  affidavit-body.html — Paragraph editor + previews + export actions
-  ---------------------------------------------------------------------------
-  Purpose:
-    • Live preview of the General Heading and Intro (from storage).
-    • Add/reorder/remove numbered affidavit paragraphs.
-    • Attach PDF exhibits per paragraph (stored in IndexedDB).
-    • Collect per-document metadata for future motion-record indexing.
-    • Export buttons (TXT works; PDF is a stub in affidavit-export.js).
--->
-
+<!-- affidavit-body.html — Paragraph editor + previews + export actions (with per-row RTE) -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -90,24 +80,17 @@
     </div>
   </div>
 
-   <!-- Document Intake Modal (opens once per uploaded file) -->
+  <!-- Document Intake Modal (opens once per uploaded file) -->
   <div id="docMetaModal" class="modal" aria-hidden="true">
     <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="docMetaTitle">
       <h3 id="docMetaTitle">Describe your document</h3>
-
-      <!-- Guidance content is injected by JS from constants.getDefaultDocGuidance() -->
       <div id="docMetaGuidance" class="guidance" aria-live="polite"></div>
-
       <form id="docMetaForm"></form>
-
       <div id="docMetaErrors" class="form-errors" role="alert" aria-live="assertive"></div>
-
       <div class="modal-actions">
-        <!-- Skip removed to force completion -->
         <button id="docMetaSave" type="button">Save</button>
       </div>
     </div>
   </div>
-
 </body>
 </html>

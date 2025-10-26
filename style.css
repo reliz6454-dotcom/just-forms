@@ -1,19 +1,18 @@
 /* 
   style.css — Global styles for forms, party blocks, affidavit editor, and previews
   ------------------------------------------------------------------------------
-  Purpose:
-    • Provide consistent typography and layout for all pages.
-    • Style dynamic party rows, controls, and affidavit body editor.
-    • Include a Word-like preview style for the General Heading block.
 */
+
+/* ===== Predictable sizing ===== */
+html { box-sizing: border-box; }
+*, *::before, *::after { box-sizing: inherit; }
 
 /* ===== Headings ===== */
 h1 {
-  color: black;
   background: linear-gradient(to right, #20d38c, #1c69ed, #8a32cd, #de0e98);
-  -webkit-background-clip: text;            /* Chrome, Safari, Edge */
-  -webkit-text-fill-color: transparent;     /* Chrome, Safari, Edge */
-  background-clip: text;                    /* Firefox */
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   color: transparent;
   font-size: 30px;
 }
@@ -21,47 +20,21 @@ h1 {
 /* Basic form fieldset width constraint (desktop-friendly) */
 fieldset { width: 600px; }
 
-/* Role detail box is toggled via JS; default hidden */
-#role-detail-box {
-  display: none;
-  margin-top: 8px;
-}
+/* Role detail box toggled via JS */
+#role-detail-box { display: none; margin-top: 8px; }
 
-/* ===== Party form (Plaintiff / Defendant) unified styling ===== */
-
-/* Card-like block around each party input set */
+/* ===== Party form (Plaintiff / Defendant) ===== */
 .party-block {
   border: 1px solid #e5e5e5;
   border-radius: 8px;
   padding: 12px 0;
   background: #fff;
 }
+.party-list { display: grid; gap: 12px; max-width: 700px; }
+.or-separator { text-align: left; font-weight: 600; color: #666; margin: 10px 0; letter-spacing: 1px; }
+.party-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
 
-/* Container for dynamically added rows (grid for clean vertical spacing) */
-.party-list {
-  display: grid;
-  gap: 12px;
-  max-width: 700px;
-}
-
-/* “– OR –” separator between person vs company inputs */
-.or-separator {
-  text-align: left;
-  font-weight: 600;
-  color: #666;
-  margin: 10px 0;
-  letter-spacing: 1px;
-}
-
-/* Row-level action buttons (add/remove) aligned to the right */
-.party-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  margin-top: 8px;
-}
-
-/* Uniform button styling across the app */
+/* Buttons */
 button,
 .add-party-btn,
 .remove-party-btn {
@@ -72,73 +45,39 @@ button,
   font-size: 14px;
   cursor: pointer;
   color: #000;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color .15s, border-color .15s;
 }
 button:hover,
 .add-party-btn:hover,
-.remove-party-btn:hover {
-  background-color: #f5f5f5;
-  border-color: #bbb;
-}
+.remove-party-btn:hover { background-color: #f5f5f5; border-color: #bbb; }
 button:disabled,
-.add-party-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+.add-party-btn:disabled { opacity: .6; cursor: not-allowed; }
 
-/* Two inputs side by side using flexbox (no CSS grid dependency) */
-.name-row {
-  display: flex;
-  gap: 12px; /* space between First and Last columns */
-}
-
-/* Optional cell wrapper for label+input alignment (kept for compatibility) */
-.name-row .cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;   /* both columns equal width */
-  min-width: 0;
-}
-.name-row .cell label {
-  width: 100px;     /* consistent label column */
-  text-align: left;
-  color: #000;
-}
+/* Two inputs side by side */
+.name-row { display: flex; gap: 12px; }
+.name-row .cell { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.name-row .cell label { width: 100px; text-align: left; color: #000; }
 .name-row .cell input[type="text"] {
-  flex: 1;
-  min-width: 0;
-  padding: 6px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 6px;
 }
-
-/* Mobile fallback: stack name fields vertically */
 @media (max-width: 600px) {
   .name-row { flex-direction: column; }
   .name-row .cell label { width: auto; }
 }
 
-/* --- Helper/utility for screen readers --- */
+/* --- A11y utility --- */
 .visually-hidden {
   position: absolute !important;
   clip: rect(1px,1px,1px,1px);
-  padding: 0;
-  border: 0;
-  height: 1px;
-  width: 1px;
-  overflow: hidden;
-  white-space: nowrap;
+  padding: 0; border: 0; height: 1px; width: 1px; overflow: hidden; white-space: nowrap;
 }
 
-/* Spacing utilities (used by markup/JS) */
+/* Spacing utilities */
 .mt-6  { margin-top: .5rem; }
-.mt-12 { margin-top: .75rem; }  /* used for the intro <p> */
+.mt-12 { margin-top: .75rem; }
 .ml-6  { margin-left: .5rem; }
 
-/* ===== Affidavit body page layout ===== */
-
-/* Generic card container used by previews and editor */
+/* ===== Cards & page layout ===== */
 .card {
   border: 1px solid #e5e5e5;
   border-radius: 12px;
@@ -146,17 +85,15 @@ button:disabled,
   margin: 14px 0;
 }
 
-/* (Reserved) “Style of cause” layout for future use */
 .style-of-cause {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  gap: 8px;
-  align-items: center;
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  gap: 8px; align-items: center;
 }
 .vs { text-align: center; font-weight: 700; }
+/* Restore muted gray for generic subtle text */
 .muted { color: #666; }
 
-/* Paragraph rows layout: left (number/controls) | middle (text) | right (file placeholder) */
+/* Paragraph rows: left (number/controls) | middle (text) | right (spacer) */
 .row {
   display: grid;
   grid-template-columns: 140px 1fr 320px;
@@ -164,306 +101,168 @@ button:disabled,
   align-items: start;
   margin-bottom: 24px;
 }
+.para-num-row { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.num-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
-/* Sub-layout in the left column (stacked controls) */
-.para-num-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-start;
-}
-
-/* Keep numeric input and Apply button on one line */
-.num-controls {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-/* Larger default text area for affidavit paragraphs */
+/* Global textarea (compact so placeholders read well) */
 textarea {
   width: 100%;
-  min-height: 140px;   /* a bit taller by default */
+  min-height: 56px;
   padding: 0.6rem;
   border: 1px solid #ccc;
   border-radius: 8px;
+  line-height: 1.35;
+  resize: vertical;
 }
+textarea:focus {
+  outline: none;
+  border-color: #999;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
+}
+/* Placeholder style */
+textarea::placeholder { color: #6b7280; opacity: 1; }
+textarea::-webkit-input-placeholder { color: #6b7280; }
+textarea::-moz-placeholder { color: #6b7280; }
+textarea:-ms-input-placeholder { color: #6b7280; }
 
-/* Inputs used in the left/right columns */
 input[type="number"],
 input[type="file"] {
-  padding: 0.5rem;
-  border: 1px solid #ccc;
-  border-radius: 8px;
+  padding: 0.5rem; border: 1px solid #ccc; border-radius: 8px;
 }
-.row-file label {
-  display: block;
-  margin-bottom: 6px;
-}
+.row-file label { display: block; margin-bottom: 6px; }
 
-/* Responsive: stack the file column under text on narrower screens */
 @media (max-width: 1100px) {
-  .row {
-    grid-template-columns: 160px 1fr; /* number | text */
-  }
-  .row-file {
-    grid-column: 1 / -1;  /* file column goes full width below (currently unused) */
-  }
+  .row { grid-template-columns: 160px 1fr; }
+  .row-file { grid-column: 1 / -1; }
 }
 
 /* Badges and top toolbar */
-.pill {
-  font: 600 .85rem/1 system-ui;
-  padding: .2rem .5rem;
-  border: 1px solid #ddd;
-  border-radius: 999px;
-}
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
-}
+.pill { font: 600 .85rem/1 system-ui; padding: .2rem .5rem; border: 1px solid #ddd; border-radius: 999px; }
+.toolbar { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 
-/* Apply button for move control (with hover/disabled states) */
+/* Move control */
 .applyReorder {
-  padding: 0.4rem 0.7rem;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  background-color: #f6f6f6;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: background-color 0.15s;
+  padding: 0.4rem 0.7rem; border: 1px solid #ccc; border-radius: 8px;
+  background-color: #f6f6f6; cursor: pointer; font-size: 0.9rem; transition: background-color .15s;
 }
 .applyReorder:hover { background-color: #eaeaea; }
 .applyReorder[disabled] { opacity: .6; cursor: not-allowed; }
 
-/* === Inline “Paragraph No.” label + current number badge === */
-.no-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  margin-bottom: 6px;
-}
+/* Inline “Paragraph No.” label + current number badge */
+.no-inline { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 6px; }
+.move-controls { display: flex; flex-direction: column; gap: 4px; }
+.row-num .num { width: 5.5ch; text-align: center; padding: 4px 6px; }
 
-/* Move controls: label above, input+button on one line below */
-.move-controls {
-  display: flex;
-  flex-direction: column; /* label above */
-  gap: 4px;               /* space between label and input row */
-}
-.row-num .num {
-  width: 5.5ch;           /* fits up to ~4-digit paragraph numbers */
-  text-align: center;
-  padding: 4px 6px;
-}
-
-/* ============================================================================
-   General Heading preview (scoped, Word-like)
-   ============================================================================ */
+/* ===== General Heading preview ===== */
 #heading .gh {
-  max-width: 6.5in;              /* 8.5" page with ~1" side margins */
-  margin: 0 auto 10px auto;      /* center within card */
-  padding: 0;
-  font-family: "Times New Roman", Times, serif; /* Word-like appearance */
+  max-width: 6.5in; margin: 0 auto 10px auto; padding: 0;
+  font-family: "Times New Roman", Times, serif;
 }
-#heading .gh-line { line-height: 2; margin: 0; }   /* double spaced */
-#heading .gh-file-no { text-align: right; }        /* L1 */
-#heading .gh-court {                                /* L2 */
-  text-align: center;
-  font-weight: 700;
-  font-style: italic;
-  text-transform: uppercase;
-}
-#heading .gh-between { text-align: left; font-weight: 600; } /* L3 */
-#heading .gh-parties, #heading .gh-and { text-align: center; } /* L4,L6,L7 */
-#heading .gh-and { letter-spacing: 0.5px; font-weight: 600; }  /* L6 */
-#heading .gh-role { text-align: right; font-style: normal; }   /* L5,L8 */
+#heading .gh-line { line-height: 2; margin: 0; }
+#heading .gh-file-no { text-align: right; }
+#heading .gh-court { text-align: center; font-weight: 700; font-style: italic; text-transform: uppercase; }
+#heading .gh-between { text-align: left; font-weight: 600; }
+#heading .gh-parties, #heading .gh-and { text-align: center; }
+#heading .gh-and { letter-spacing: 0.5px; font-weight: 600; }
+#heading .gh-role { text-align: right; }
 
-/* --- Simple modal for export scheme selection --- */
-.modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.35);
-  display: none;                 /* hidden by default */
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  z-index: 1000;
+/* ===== Modal (unified) ===== */
+.modal[aria-hidden="true"] { display: none; }
+.modal[aria-hidden="false"] {
+  position: fixed; inset: 0; background: rgba(0,0,0,.35);
+  display: grid; place-items: center; z-index: 50; padding: 16px;
 }
-.modal[aria-hidden="false"] { display: flex; }
 .modal-dialog {
-  background: #fff;
-  border-radius: 12px;
-  padding: 18px 20px;
-  max-width: 460px;
-  width: 100%;
-  box-shadow: 0 10px 30px rgba(0,0,0,.2);
+  background: #fff; border-radius: 12px; padding: 18px 20px;
+  width: min(520px, 92vw); box-shadow: 0 10px 30px rgba(0,0,0,.2);
 }
-.modal-dialog h3 { margin: 0 0 6px 0; }
-#schemeForm { display: grid; gap: 8px; margin: 12px 0 16px; }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
-/* =========================================================
-   EXHIBIT SCHEME TOGGLE (letters | numbers)
-   ========================================================= */
-.scheme-control {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: 8px;     /* spacing from Redo button */
-  font-size: 14px;
+/* Intake modal controls */
+#docMetaForm label { display: block; margin: 8px 0 4px; font-weight: 600; }
+#docMetaForm textarea,
+#docMetaForm input[type="date"],
+#docMetaForm select {
+  width: 100%; max-width: 100%; box-sizing: border-box;
 }
+
+/* ===== Exhibit scheme toggle ===== */
+.scheme-control { display: inline-flex; align-items: center; gap: 8px; margin-left: 8px; font-size: 14px; }
 .scheme-label { color: #444; }
 .scheme-option { font-weight: 600; }
-
-/* iOS-style switch */
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 42px;
-  height: 24px;
-}
+.switch { position: relative; display: inline-block; width: 42px; height: 24px; }
 .switch input { display: none; }
 .slider {
-  position: absolute;
-  cursor: pointer;
-  inset: 0;
-  background: #ccc;
-  border-radius: 24px;
-  transition: 0.2s;
+  position: absolute; cursor: pointer; inset: 0; background: #ccc;
+  border-radius: 24px; transition: .2s;
 }
 .slider:before {
-  content: "";
-  position: absolute;
-  height: 18px;
-  width: 18px;
-  left: 3px;
-  top: 3px;
-  background: white;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0,0,0,.25);
-  transition: 0.2s;
+  content: ""; position: absolute; height: 18px; width: 18px; left: 3px; top: 3px;
+  background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: .2s;
 }
 .switch input:checked + .slider { background: #4caf50; }
 .switch input:checked + .slider:before { transform: translateX(18px); }
 
-/* ===== Controls Toolbar Layout (Add / Undo / Redo / Exhibit Toggle) ===== */
-.controls {
-  margin: 0.5rem 0 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: nowrap; /* keeps bar on one line */
-}
+/* ===== Controls Toolbar ===== */
+.controls { margin: .5rem 0 1rem; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: nowrap; }
+.controls-right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-.controls-right {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap; /* graceful wrapping on very narrow screens */
-}
-
-/* =========================================================
-   MULTI-EXHIBIT STRIP & CHIPS
-   ========================================================= */
-.exhibit-strip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;          /* chips wrap when crowded */
-  margin-top: 8px;
-}
-
+/* ===== Multi-exhibit strip & chips ===== */
+.exhibit-strip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .exhibit-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 999px;
-  background: #fafafa;
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 8px;
+  border: 1px solid #ddd; border-radius: 999px; background: #fafafa;
 }
-
-.exhibit-chip .exhibit-actions {
-  display: inline-flex;
-  gap: 6px;
-}
-
+.exhibit-chip .exhibit-actions { display: inline-flex; gap: 6px; }
 .exhibit-chip button {
-  padding: 0 6px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  background: #f6f6f6;
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 20px;
+  padding: 0 6px; border: 1px solid #ccc; border-radius: 6px;
+  background: #f6f6f6; cursor: pointer; font-size: 12px; line-height: 20px;
 }
 .exhibit-chip button:hover { background: #eaeaea; }
 
-/* Optional: horizontal scrolling if you prefer a single-line rail */
-/*
-.exhibit-strip {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-.exhibit-chip { flex: 0 0 auto; }
-*/
-
-/* =========================================================
-   INLINE CHIPS EDITOR (contenteditable paragraph body)
-   ========================================================= */
+/* ===== Inline chips editor ===== */
 .para-editor {
   width: 100%;
   min-height: 140px;
   padding: 0.6rem;
   border: 1px solid #ccc;
   border-radius: 8px;
-  white-space: pre-wrap;         /* preserve user line breaks */
+  white-space: pre-wrap;
   word-wrap: break-word;
-  outline: none;                 /* we’ll control focus ring */
+  outline: none;
+  color: #111;
 }
-.para-editor:focus {
-  border-color: #999;
-  box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
-}
+.para-editor:focus { border-color: #999; box-shadow: 0 0 0 3px rgba(0,0,0,0.05); }
 
-/* Non-editable inline exhibit token (chip) — render like text with clear spacing */
 .exh-chip {
-  display: inline;         /* no pill frame */
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0 0.2em;         /* ensures visible space before/after */
-  font-weight: 600;        /* subtle emphasis; set to 'inherit' to match text exactly */
-  line-height: inherit;
-  user-select: none;
-  -webkit-user-select: none;
+  display: inline; background: none; border: none; padding: 0; margin: 0 0.2em;
+  font-weight: 600; line-height: inherit; user-select: none; -webkit-user-select: none;
+  color: inherit;
 }
 
-/* Remove the old hair-space padding */
-.exh-chip::before,
-.exh-chip::after {
-  content: none;
-}
-
-/* Optional visual cue on hover */
-.exh-chip:hover {
-  text-decoration: underline dotted;
-  text-underline-offset: 2px;
-}
-
-/* Remove up/down arrows from number inputs */
+/* Remove number spinners (with standard property for compatibility) */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 input[type="number"] {
-  -moz-appearance: textfield; /* Firefox */
+  -moz-appearance: textfield;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ===== Form error styles ===== */
+.form-errors { color: #dc2626; margin-top: .25rem; font-size: 0.95rem; }
+.field input[type="date"].error,
+.field textarea.error,
+.field input[type="text"].error,
+.field select.error {
+  outline: 2px solid #dc2626; outline-offset: 2px; border-color: #dc2626;
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: #888;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
 }

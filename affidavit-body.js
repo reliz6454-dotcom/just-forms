@@ -1,4 +1,6 @@
-// affidavit-body.js — exhibits + paragraph editor + metadata intake + RTE (with chip guards)
+// affidavit-body.js — exhibits + paragraph editor + metadata intake + RTE
+// Variant: cleaned to use ZWSP-only cushions (no visible space) and remove visible-space deletion branches
+
 import { LS, loadJSON, saveJSON, loadDocSchema, loadDocGuidance } from "./constants.js";
 
 /* ---------- DOM helpers ---------- */
@@ -102,21 +104,17 @@ async function computePdfPageCountFromBlob(blob) {
 
 /* ---------- Utilities ---------- */
 const byNumber = (a, b) => (a.number || 0) - (b.number || 0);
-const stripGuards = (s) => (s || "").replace(/\u200B/g, ""); // remove zero-width spaces from text runs
+const stripGuards = (s) => (s || "").replace(/\u200B/g, "");
 
-// --- Chip & edit helpers ---
+// Chip predicate
 const isChipEl = (n) => n && n.nodeType === 1 && n.classList?.contains("exh-chip");
 
-const isDangerousInput = (t) =>
-  t && (
-    t.startsWith("delete") ||
-    t === "deleteByCut" ||
-    t === "insertFromPaste" ||
-    t === "insertFromDrop" ||
-    t === "insertReplacementText"
-  );
+/* ---------- Guard helpers for ZWSP-only cushions ---------- */
+const LEFT_GUARD_TEXT  = "\u200B"; // ZWSP only
+const RIGHT_GUARD_TEXT = "\u200B"; // ZWSP only
+function isZwspText(n)  { return !!(n && n.nodeType === Node.TEXT_NODE && /\u200B/.test(n.nodeValue || "")); }
 
-// Selection contains a chip? (works well on Safari/Firefox)
+/* ---------- Selection helpers for chips ---------- */
 function rangeContainsChip(range) {
   if (!range || range.collapsed) return false;
   const frag = range.cloneContents?.();
@@ -125,14 +123,13 @@ function rangeContainsChip(range) {
   probe.appendChild(frag);
   return !!probe.querySelector(".exh-chip");
 }
-
-// Trim a range so it excludes any chip elements; null if nothing left
 function trimRangeToAvoidChips(range, root) {
   const r = range.cloneRange();
 
   // Move start forward past any chip
   while (true) {
-    const sc = r.startContainer, so = r.startOffset;
+    const sc = r.startContainer;
+    const so = r.startOffset;
     if (!root.contains(sc)) break;
 
     if (sc.nodeType === Node.ELEMENT_NODE) {
@@ -155,7 +152,8 @@ function trimRangeToAvoidChips(range, root) {
 
   // Move end backward before any chip
   while (true) {
-    const ec = r.endContainer, eo = r.endOffset;
+    const ec = r.endContainer;
+    const eo = r.endOffset;
     if (!root.contains(ec)) break;
 
     if (ec.nodeType === Node.ELEMENT_NODE) {
@@ -182,7 +180,7 @@ function trimRangeToAvoidChips(range, root) {
   return r.collapsed ? null : r;
 }
 
-// Clipboard fallback (for Safari, permissions edge cases)
+/* ---------- Clipboard text writer (fallback safe) ---------- */
 async function writePlainTextToClipboard(txt) {
   try {
     if (navigator.clipboard?.writeText) {
@@ -204,10 +202,10 @@ async function writePlainTextToClipboard(txt) {
 const createParagraph = () => ({
   id: crypto.randomUUID(),
   number: 0,
-  text: "",               // legacy plain text
-  html: "",               // sanitized rich text
+  text: "",
+  html: "",
   exhibits: [],
-  runs: [{ type: "text", text: "" }] // legacy runs; kept for chips
+  runs: [{ type: "text", text: "" }]
 });
 function newParagraph() { const list = loadParas().sort(byNumber); const p = createParagraph(); p.number = list.length + 1; return p; }
 function renumber(list) { list.forEach((p, i) => { p.number = i + 1; }); return list; }
@@ -356,16 +354,11 @@ function sanitizeHTML(inputHTML) {
       }
     }
 
+    // Intentionally do NOT persist custom list-style attrs; use browser defaults
     let open = `<${tag.toLowerCase()}`;
     if (tag === "SPAN" && node.classList.contains("exh-chip")) {
       const exId = node.getAttribute("data-ex-id") || node.dataset.exId || "";
       open += ` class="exh-chip" data-ex-id="${exId}" contenteditable="false"`;
-    }
-    if (tag === "OL") {
-      // persist style for Firefox/Safari by mirroring to attribute too
-      const lst = (node.getAttribute && node.getAttribute("data-list-style")) ||
-                  (node.style && node.style.listStyleType) || "";
-      if (lst) open += ` style="list-style-type:${lst}" data-list-style="${lst}"`;
     }
     open += ">";
 
@@ -392,9 +385,10 @@ function makeExhibitChip(exId, labelText) {
   return chip;
 }
 function makeChipWithGuards(exId, labelText) {
-  const leftGuard  = document.createTextNode("\u200B");
+  // ZWSP on both sides
+  const leftGuard  = document.createTextNode(LEFT_GUARD_TEXT);
   const chip       = makeExhibitChip(exId, labelText);
-  const rightGuard = document.createTextNode("\u200B");
+  const rightGuard = document.createTextNode(RIGHT_GUARD_TEXT);
   return [leftGuard, chip, rightGuard];
 }
 function appendChipWithGuards(parent, exId, labelText) {
@@ -404,11 +398,13 @@ function appendChipWithGuards(parent, exId, labelText) {
 function ensureGuardsAroundChip(chip) {
   const prev = chip.previousSibling;
   const next = chip.nextSibling;
-  if (!(prev && prev.nodeType === Node.TEXT_NODE && prev.nodeValue?.includes("\u200B"))) {
-    chip.parentNode?.insertBefore(document.createTextNode("\u200B"), chip);
+
+  if (!(prev && prev.nodeType === Node.TEXT_NODE && prev.nodeValue === LEFT_GUARD_TEXT)) {
+    chip.parentNode?.insertBefore(document.createTextNode(LEFT_GUARD_TEXT), chip);
   }
-  if (!(next && next.nodeType === Node.TEXT_NODE && next.nodeValue?.includes("\u200B"))) {
-    chip.parentNode?.insertBefore(document.createTextNode("\u200B"), chip.nextSibling);
+
+  if (!(next && next.nodeType === Node.TEXT_NODE && next.nodeValue === RIGHT_GUARD_TEXT)) {
+    chip.parentNode?.insertBefore(document.createTextNode(RIGHT_GUARD_TEXT), chip.nextSibling);
   }
 }
 
@@ -479,14 +475,103 @@ function collectRunsFromEditor(editorEl) {
   return out;
 }
 
-/* === Chip protection (permissive: protect chips, allow text edits) === */
+/* ---------- Smart-backspace helpers (for list items that start with guard+chip) ---------- */
+function closestTag(el, tag) {
+  tag = tag.toUpperCase();
+  while (el && el.nodeType === 1) {
+    if (el.tagName === tag) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+// LI starts with LEFT_GUARD_TEXT + CHIP (or CHIP directly)
+function liStartsWithChip(li) {
+  if (!li) return false;
+  let first = li.firstChild;
+  while (first && first.nodeType === Node.TEXT_NODE && (first.nodeValue || "") === "") first = first.nextSibling;
+  if (!first) return false;
+  if (first.nodeType === Node.TEXT_NODE && first.nodeValue === LEFT_GUARD_TEXT) {
+    const second = first.nextSibling;
+    return isChipEl(second);
+  }
+  return isChipEl(first);
+}
+
+// Caret detection at the VERY start of a chip-leading <li>
+function caretAtStartOfLiWithChip(range) {
+  if (!range || !range.collapsed) return null;
+  const li = closestTag(range.startContainer, "LI");
+  if (!li) return null;
+
+  // Determine the first meaningful node
+  let first = li.firstChild;
+  while (first && first.nodeType === Node.TEXT_NODE && first.nodeValue === "") first = first.nextSibling;
+
+  const startsWithGuardThenChip =
+    first && first.nodeType === Node.TEXT_NODE && first.nodeValue === LEFT_GUARD_TEXT && isChipEl(first.nextSibling);
+  const startsWithChip = isChipEl(first);
+
+  if (!(startsWithGuardThenChip || startsWithChip)) return null;
+
+  const sc = range.startContainer;
+  const so = range.startOffset;
+
+  if (sc === li && so === 0) return li;                       // caret at start of LI
+  if (startsWithGuardThenChip && sc === first && so <= 1) return li; // inside guard at its start
+  if (sc && sc.nodeType === Node.TEXT_NODE && so === 0 && isChipEl(sc.nextSibling)) return li;
+
+  return null;
+}
+
+function shouldOutdentAtCaret(range) {
+  if (!range || !range.collapsed) return null;
+
+  // Find containing LI
+  let container = range.startContainer;
+  if (container.nodeType === Node.ELEMENT_NODE) {
+    const childAt = container.childNodes[range.startOffset] || container.childNodes[range.startOffset - 1] || container;
+    const liFromProbe = closestTag(childAt, "LI");
+    if (liFromProbe) container = liFromProbe;
+  }
+  const li = closestTag(container, "LI");
+  if (!li) return null;
+
+  // Early check: if LI starts with guard+chip (or chip), outdent on backspace at start/cushion
+  const sc = range.startContainer;
+  const so = range.startOffset;
+
+  if (liStartsWithChip(li)) {
+    if (sc === li && so === 0) return li;
+
+    const first = li.firstChild;
+    if (first && first.nodeType === Node.TEXT_NODE && first.nodeValue === LEFT_GUARD_TEXT) {
+      if (sc === first) return li;
+      const afterGuard = first.nextSibling;
+      if (isChipEl(afterGuard) && so === 0 && sc.nodeType === Node.TEXT_NODE) return li;
+    }
+
+    const firstNode = li.firstChild;
+    if (isChipEl(firstNode) && sc === li && so === 0) return li;
+
+    if (sc && sc.nodeType === Node.TEXT_NODE && so === 0 && isChipEl(sc.nextSibling)) return li;
+  }
+
+  return null;
+}
+
+function safeOutdentFromLi(editor) {
+  editor.focus();
+  document.execCommand("outdent", false, null);
+}
+
+/* === Chip protection (hardened; chips are non-deletable, text around is editable) === */
 function protectChips(editor) {
-  // IME/mobile composition guard
   let _isComposing = false;
   editor.addEventListener("compositionstart", () => { _isComposing = true; });
   editor.addEventListener("compositionend",   () => { _isComposing = false; });
 
-  // Clicking a chip puts caret after right guard
+  // Clicking a chip places caret after right guard
   editor.addEventListener("mousedown", (e) => {
     const t = e.target;
     if (isChipEl(t)) {
@@ -497,9 +582,9 @@ function protectChips(editor) {
       if (rightGuard && rightGuard.nodeType === Node.TEXT_NODE) {
         r.setStart(rightGuard, rightGuard.nodeValue.length);
       } else {
-        const guard = document.createTextNode("\u200B");
+        const guard = document.createTextNode(RIGHT_GUARD_TEXT);
         t.parentNode?.insertBefore(guard, t.nextSibling);
-        r.setStart(guard, 1);
+        r.setStart(guard, guard.nodeValue.length);
       }
       r.collapse(true);
       const sel = window.getSelection();
@@ -507,37 +592,47 @@ function protectChips(editor) {
     }
   });
 
-  // Allow edits, but never delete/overwrite chip elements
+  // Block delete/cut operations that would touch chips + smart backspace for list-start chips
   editor.addEventListener("beforeinput", (e) => {
     if (_isComposing) return;
     const t = e.inputType || "";
-    if (!isDangerousInput(t)) return;
+    const isDelete =
+      t.startsWith("delete") ||
+      t === "deleteByCut" ||
+      t === "insertReplacementText";
 
     const sel = document.getSelection?.();
     if (!sel || sel.rangeCount === 0) return;
     const r = sel.getRangeAt(0);
 
-    // Non-collapsed: trim around chips and perform operation only on text
-    if (!r.collapsed) {
-      if (rangeContainsChip(r)) {
-        e.preventDefault(); e.stopPropagation();
-        const safe = trimRangeToAvoidChips(r, editor);
-        if (!safe) return; // selection was only chips
-        sel.removeAllRanges(); sel.addRange(safe);
-        if (t.startsWith("delete") || t === "deleteByCut" || t === "insertReplacementText") {
-          document.execCommand("delete", false, null);
-        }
+    // SMART BACKSPACE EARLY: outdent must win before guard tweaks
+    if (t === "deleteContentBackward") {
+      const liEarly = caretAtStartOfLiWithChip(r) || shouldOutdentAtCaret(r);
+      if (liEarly) {
+        e.preventDefault();
+        e.stopPropagation();
+        safeOutdentFromLi(editor);
+        return;
       }
+    }
+
+    if (!isDelete) return;
+
+    // If selection covers a chip, cancel deletion entirely
+    if (!r.collapsed && rangeContainsChip(r)) {
+      e.preventDefault(); e.stopPropagation();
       return;
     }
 
-    // Collapsed: block deletion that would target chip siblings
+    // Collapsed: prevent deleting a chip when caret is adjacent
     const sc = r.startContainer, so = r.startOffset;
+
     const neighborAt = (container, offset, dir) => {
       if (container.nodeType === Node.TEXT_NODE) {
         return dir < 0 ? container.previousSibling : container.nextSibling;
       }
-      return container.childNodes[offset + (dir < 0 ? -1 : 0)] || null;
+      const idx = offset + (dir < 0 ? -1 : 0);
+      return container.childNodes[idx] || null;
     };
 
     const leftNode  = neighborAt(sc, so, -1);
@@ -546,57 +641,103 @@ function protectChips(editor) {
     const deletingBackward = t === "deleteContentBackward" || t === "deleteWordBackward" || t === "deleteSoftLineBackward";
     const deletingForward  = t === "deleteContentForward"  || t === "deleteWordForward"  || t === "deleteHardLineForward";
 
-    // If in the middle of a text node, allow normal deletion
+    // Give smart-outdent another chance
+    if (deletingBackward) {
+      const li2 = caretAtStartOfLiWithChip(r) || shouldOutdentAtCaret(r);
+      if (li2) {
+        e.preventDefault();
+        e.stopPropagation();
+        safeOutdentFromLi(editor);
+        return;
+      }
+    }
+
+    // Normal delete within text nodes away from edges
     if (sc.nodeType === Node.TEXT_NODE) {
       if (deletingBackward && so > 0) return;
       if (deletingForward  && so < (sc.nodeValue || "").length) return;
     }
 
-    if ((deletingBackward && isChipEl(leftNode)) || (deletingForward && isChipEl(rightNode))) {
+    // Block deleting the chip itself
+    const willHitChipBackward = (deletingBackward && isChipEl(leftNode));
+    const willHitChipForward  = (deletingForward  && isChipEl(rightNode));
+
+    if (willHitChipBackward || willHitChipForward) {
       e.preventDefault(); e.stopPropagation();
       return;
     }
-  });
+  }, { capture: true });
 
-  // Ctrl/Cmd+X: if selection overlaps chips, cut only text portion
-  editor.addEventListener("keydown", async (e) => {
-    const sel = window.getSelection?.();
-    const isMac = navigator.platform.toUpperCase().includes("MAC");
-    const modX = (isMac ? e.metaKey : e.ctrlKey) && e.key.toLowerCase() === "x";
-    if (!modX || !sel || sel.rangeCount === 0) return;
+  // Fallback for Backspace/Delete & context-menu Cut (also includes smart-backspace)
+  editor.addEventListener("keydown", (e) => {
+    if (e.key !== "Backspace" && e.key !== "Delete") return;
 
-    const r = sel.getRangeAt(0);
-    if (r.collapsed || !rangeContainsChip(r)) return;
-
-    e.preventDefault(); e.stopPropagation();
-    const safe = trimRangeToAvoidChips(r, editor);
-    if (!safe) return;
-
-    const probe = document.createElement("div");
-    probe.appendChild(safe.cloneContents());
-    const txt = probe.textContent || "";
-    await writePlainTextToClipboard(txt);
-
-    sel.removeAllRanges(); sel.addRange(safe);
-    document.execCommand("delete", false, null);
-  });
-
-  // Plain-text paste; if overlaps chips, paste into trimmed range
-  editor.addEventListener("paste", (e) => {
     const sel = window.getSelection?.();
     if (!sel || sel.rangeCount === 0) return;
     const r = sel.getRangeAt(0);
 
-    const text = (e.clipboardData?.getData("text/plain") || "").replace(/\r\n?/g, "\n");
-    e.preventDefault();
-
-    if (!r.collapsed && rangeContainsChip(r)) {
-      const safe = trimRangeToAvoidChips(r, editor);
-      if (!safe) return;
-      sel.removeAllRanges(); sel.addRange(safe);
+    // SMART BACKSPACE mirror (ensure outdent runs first)
+    if (e.key === "Backspace") {
+      const liEarly = caretAtStartOfLiWithChip(r) || shouldOutdentAtCaret(r);
+      if (liEarly) {
+        e.preventDefault();
+        e.stopPropagation();
+        safeOutdentFromLi(editor);
+        return;
+      }
     }
-    document.execCommand("insertText", false, text);
-  });
+
+    // If selection spans a chip, block
+    if (!r.collapsed) {
+      const frag = r.cloneContents?.();
+      if (frag) {
+        const probe = document.createElement("div");
+        probe.appendChild(frag);
+        if (probe.querySelector(".exh-chip")) {
+          e.preventDefault(); e.stopPropagation();
+          return;
+        }
+      }
+    } else {
+      // Collapsed: check adjacency
+      const sc = r.startContainer, so = r.startOffset;
+
+      const neighborAt = (container, offset, dir) => {
+        if (container.nodeType === Node.TEXT_NODE) {
+          return dir < 0 ? container.previousSibling : container.nextSibling;
+        }
+        const idx = offset + (dir < 0 ? -1 : 0);
+        return container.childNodes[idx] || null;
+      };
+      const leftNode  = neighborAt(sc, so, -1);
+      const rightNode = neighborAt(sc, so, +1);
+
+      const hit =
+        (e.key === "Backspace" && isChipEl(leftNode)) ||
+        (e.key === "Delete"    && isChipEl(rightNode));
+      if (hit) { e.preventDefault(); e.stopPropagation(); return; }
+    }
+  }, { capture: true });
+
+  editor.addEventListener("cut", async (e) => {
+    const sel = window.getSelection?.();
+    if (!sel || sel.rangeCount === 0) return;
+    const r = sel.getRangeAt(0);
+    if (r.collapsed) return;
+
+    const frag = r.cloneContents?.();
+    if (!frag) return;
+    const probe = document.createElement("div");
+    probe.appendChild(frag);
+    if (probe.querySelector(".exh-chip")) {
+      e.preventDefault(); e.stopPropagation();
+      const txt = probe.textContent || "";
+      try {
+        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(txt);
+      } catch (_) {}
+      document.execCommand("delete", false, null);
+    }
+  }, { capture: true });
 
   // Prevent dragging chips
   editor.addEventListener("dragstart", (e) => { if (isChipEl(e.target)) e.preventDefault(); });
@@ -609,23 +750,17 @@ function protectChips(editor) {
   mo.observe(editor, { childList: true, subtree: true, characterData: true });
 }
 
-/* ---------- RTE toolbar helpers ---------- */
+/* ---------- RTE toolbar (dropdown removed) ---------- */
 function buildRteToolbar() {
   const tb = el("div", { className: "rte-toolbar" });
   const btn = (label, cmd, title) => el("button", { type: "button", innerText: label, title: title || label, dataset: { cmd } });
-  const styleSel = el("select", { title: "Numbering style", dataset: { action: "listStyle" } },
-    el("option", { value: "decimal", innerText: "1." }),
-    el("option", { value: "lower-alpha", innerText: "a." }),
-    el("option", { value: "lower-roman", innerText: "i." }),
-  );
   tb.append(
     btn("B", "bold", "Bold (Cmd/Ctrl+B)"),
-    btn("I", "italic", "Italic (Cmd/Ctrl+I)"),
+    btn("i", "italic", "Italic (Cmd/Ctrl+I)"),
     btn("U", "underline", "Underline (Cmd/Ctrl+U)"),
     el("span", { className: "sep" }),
     btn("•", "insertUnorderedList", "Bulleted list"),
     btn("1.", "insertOrderedList", "Numbered list"),
-    styleSel,
     el("span", { className: "sep" }),
     btn("→", "indent", "Indent"),
     btn("←", "outdent", "Outdent"),
@@ -645,20 +780,7 @@ function execOnEditor(ed, cmd, value = null) {
   document.execCommand(cmd, false, value);
 }
 
-/* Apply list style to the nearest <ol> ancestor of the selection */
-function applyListStyle(ed, styleType) {
-  if (!ed) return;
-  ed.focus();
-  document.execCommand("insertOrderedList");
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return;
-  let node = sel.anchorNode;
-  if (node && node.nodeType === Node.TEXT_NODE) node = node.parentElement;
-  const ol = node ? node.closest("ol") : null;
-  if (ol) { ol.style.listStyleType = styleType; ol.setAttribute("data-list-style", styleType); }
-}
-
-/* Save editor HTML (sanitized) + runs(chips) to model */
+/* ---------- Save editor HTML (sanitized) + runs(chips) ---------- */
 function persistEditor(p, ed) {
   const raw = ed.innerHTML;
   const clean = sanitizeHTML(raw);
@@ -720,28 +842,23 @@ function moveExhibit(pId, exId, dir) {
   if (swapWith < 0 || swapWith >= exs.length) { saveParas(renumber(list)); return; }
   [exs[idx], exs[swapWith]] = [exs[swapWith], exs[idx]];
 
-  // Reorder chip + its guards in HTML to mirror change
   if (typeof p.html === "string" && p.html) {
     const tmp = document.createElement("div");
     tmp.innerHTML = p.html;
     const chip = tmp.querySelector(`.exh-chip[data-ex-id="${exId}"]`);
     if (chip && chip.parentNode) {
       const parent = chip.parentNode;
-      const leftGuard  = chip.previousSibling && chip.previousSibling.nodeType === Node.TEXT_NODE && chip.previousSibling.nodeValue?.includes("\u200B") ? chip.previousSibling : null;
-      const rightGuard = chip.nextSibling     && chip.nextSibling.nodeType === Node.TEXT_NODE && chip.nextSibling.nodeValue?.includes("\u200B") ? chip.nextSibling : null;
+      const leftGuard  = chip.previousSibling && chip.previousSibling.nodeType === Node.TEXT_NODE && isZwspText(chip.previousSibling) ? chip.previousSibling : (chip.previousSibling && chip.previousSibling.nodeType === Node.TEXT_NODE && chip.previousSibling.nodeValue === LEFT_GUARD_TEXT ? chip.previousSibling : null);
+      const rightGuard = chip.nextSibling     && chip.nextSibling.nodeType === Node.TEXT_NODE && isZwspText(chip.nextSibling) ? chip.nextSibling : null;
 
-      // group nodes to move
       const group = [leftGuard, chip, rightGuard].filter(Boolean);
 
-      // find target anchor: skip across text nodes to find next/prev element/text
       const siblings = Array.from(parent.childNodes);
       const curFirst = group[0] || chip;
       const curIdx = siblings.indexOf(curFirst);
       let targetIdx = curIdx;
 
-      // Move by one logical step
       if (dir > 0) {
-        // move after the node just after the group
         const afterGroup = siblings[curIdx + group.length] || null;
         if (afterGroup) {
           targetIdx = siblings.indexOf(afterGroup) + 1;
@@ -749,7 +866,6 @@ function moveExhibit(pId, exId, dir) {
           targetIdx = siblings.length;
         }
       } else {
-        // move before the node just before the group
         const beforeGroup = siblings[curIdx - 1] || null;
         if (beforeGroup) {
           targetIdx = siblings.indexOf(beforeGroup);
@@ -758,7 +874,6 @@ function moveExhibit(pId, exId, dir) {
         }
       }
 
-      // Remove group and re-insert at targetIdx
       group.forEach(n => parent.removeChild(n));
       const ref = parent.childNodes[targetIdx] || null;
       group.forEach(n => parent.insertBefore(n, ref));
@@ -783,9 +898,9 @@ function removeExhibit(pId, exId) {
     if (chip) {
       const left  = chip.previousSibling;
       const right = chip.nextSibling;
-      if (left && left.nodeType === Node.TEXT_NODE && left.nodeValue?.includes("\u200B")) left.remove();
+      if (left  && left.nodeType  === Node.TEXT_NODE && isZwspText(left))  left.remove();
       chip.remove();
-      if (right && right.nodeType === Node.TEXT_NODE && right.nodeValue?.includes("\u200B")) right.remove();
+      if (right && right.nodeType === Node.TEXT_NODE && isZwspText(right)) right.remove();
     }
     p.html = sanitizeHTML(tmp.innerHTML);
   }
@@ -992,7 +1107,7 @@ function renderRow(p, totalCount, labels) {
   const mid = el("div", { className: "row-text" });
   const textLbl = el("label", { innerText: "Paragraph text" });
 
-  // RTE toolbar + editor
+  // RTE toolbar + editor (no dropdown)
   const toolbar = buildRteToolbar();
   const editor = renderEditorFromParagraph(p, labels);
   protectChips(editor);
@@ -1015,15 +1130,6 @@ function renderRow(p, totalCount, labels) {
       execOnEditor(ed, cmd);
     }
 
-    persistEditor(p, ed);
-    syncUndoRedoButtons();
-  });
-
-  // List style selector
-  const styleSel = toolbar.querySelector('select[data-action="listStyle"]');
-  styleSel.addEventListener("change", () => {
-    const ed = getActiveEditor(toolbar);
-    applyListStyle(ed, styleSel.value);
     persistEditor(p, ed);
     syncUndoRedoButtons();
   });
@@ -1108,7 +1214,7 @@ function renderRow(p, totalCount, labels) {
   delBtn.onclick = () => { if (confirm("Remove this paragraph?")) { removeParagraph(p.id); renderParagraphs(); } };
   insBelow.onclick = () => { insertNewBelow(p.number); renderParagraphs(); };
 
-  // Add exhibits (picker) — queue intake for each file selected
+  // Add exhibits (picker)
   const openPicker = () => fileMulti.click();
   addBtn.onclick = openPicker;
 

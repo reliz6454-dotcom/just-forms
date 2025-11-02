@@ -263,6 +263,10 @@ input[type="file"] { padding: 0.5rem; border: 1px solid #ccc; border-radius: 8px
   padding-left: 1.5rem;
   margin: .25rem 0;
 }
+/* Force ordered lists to a., b., c. */
+.para-editor ol {
+  list-style-type: lower-alpha !important;
+}
 .para-editor li { margin: .15rem 0; }
 
 /* ===== Numbers input (remove spinners) ===== */

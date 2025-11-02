@@ -760,7 +760,7 @@ function buildRteToolbar() {
     btn("U", "underline", "Underline (Cmd/Ctrl+U)"),
     el("span", { className: "sep" }),
     btn("•", "insertUnorderedList", "Bulleted list"),
-    btn("1.", "insertOrderedList", "Numbered list"),
+    btn("a.", "insertOrderedList", "Alphabetical list (a., b., c.)"),
     el("span", { className: "sep" }),
     btn("→", "indent", "Indent"),
     btn("←", "outdent", "Outdent"),

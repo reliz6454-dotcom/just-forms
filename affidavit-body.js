@@ -1,7 +1,7 @@
 // affidavit-body.js — TipTap-only editors per paragraph + atomic exhibit chips (Node)
 // No execCommand, no manual contentEditable handlers — purely TipTap.
 
-import { Editor, Node } from "https://esm.sh/@tiptap/core@2";
+import { Editor, Node, Extension } from "https://esm.sh/@tiptap/core@2";
 import StarterKit from "https://esm.sh/@tiptap/starter-kit@2";
 import Underline from "https://esm.sh/@tiptap/extension-underline@2";
 import { Plugin } from "https://esm.sh/@tiptap/pm@2/state";
@@ -154,7 +154,7 @@ const ExhibitChip = Node.create({
   atom: true,
   selectable: false,
   draggable: false,
-  isolating: true, // safer edits around the atom
+  isolating: true,
 
   addAttributes() {
     return {
@@ -175,7 +175,6 @@ const ExhibitChip = Node.create({
 
   renderHTML({ HTMLAttributes }) {
     const { exId, label } = HTMLAttributes;
-    // The chip itself is clean; ZWSP padding is added by the insertion command.
     return ["span",
       { class: "exh-chip", "data-ex-id": exId, contenteditable: "false" },
       `exhibit "${label}"`
@@ -198,7 +197,6 @@ const ExhibitChip = Node.create({
             .run();
         },
 
-      // Programmatic removal only (used by removeExhibit)
       removeExhibitChip:
         (exId) =>
         ({ state, dispatch, tr }) => {
@@ -208,7 +206,7 @@ const ExhibitChip = Node.create({
             if (node.type.name === "exhibitChip" && node.attrs.exId === exId) {
               fromPos = pos;
               toPos = pos + node.nodeSize;
-              return false; // stop walking
+              return false;
             }
           });
           if (fromPos == null) return false;
@@ -221,8 +219,6 @@ const ExhibitChip = Node.create({
 
   addKeyboardShortcuts() {
     return {
-      // If Backspace at the very start of a list item that begins with a chip (or its leading ZWSP),
-      // lift the list item instead of deleting the chip.
       Backspace: ({ editor }) => {
         const { $from } = editor.state.selection;
         const atStart = $from.parentOffset === 0;
@@ -249,15 +245,63 @@ const ExhibitChip = Node.create({
     return [
       new Plugin({
         filterTransaction: (tr, state) => {
-          if (tr.getMeta("allowChipRemoval")) return true; // allowed programmatic removal
-          if (!tr.docChanged) return true;                 // selection/meta only
+          if (tr.getMeta("allowChipRemoval")) return true;
+          if (!tr.docChanged) return true;
           const before = countChips(state.doc);
           const after  = countChips(tr.doc);
-          // Block any user action that would reduce chip count
           return after >= before;
         },
       }),
     ];
+  },
+});
+
+/* --- ListExitFix: exit list cleanly with one Backspace on empty item --- */
+const ListExitFix = Extension.create({
+  name: "listExitFix",
+  addKeyboardShortcuts() {
+    return {
+      Backspace: ({ editor }) => {
+        const { $from } = editor.state.selection;
+        if (!editor.isActive("listItem") || $from.parentOffset !== 0) return false;
+
+        // Treat ZWSP-only as empty
+        const text = ($from.parent?.textContent || "").replace(/\u200B/g, "");
+        if (text.length > 0) return false;
+
+        let changed = false;
+        while (editor.isActive("listItem")) {
+          const ok = editor.commands.liftListItem("listItem");
+          if (!ok) break;
+          changed = true;
+        }
+        // In case we're still nested in list wrappers
+        if (editor.isActive("bulletList") || editor.isActive("orderedList")) {
+          editor.commands.liftListItem("listItem");
+          changed = true;
+        }
+        return changed;
+      },
+    };
+  },
+});
+
+/* --- ParagraphJoinFix: second Backspace at start of empty paragraph joins up --- */
+const ParagraphJoinFix = Extension.create({
+  name: "paragraphJoinFix",
+  addKeyboardShortcuts() {
+    return {
+      Backspace: ({ editor }) => {
+        const { $from } = editor.state.selection;
+        if ($from.parentOffset !== 0) return false;
+        // Only handle plain paragraphs (not list items)
+        if (!($from.parent?.type?.name === "paragraph")) return false;
+        const text = ($from.parent?.textContent || "").replace(/\u200B/g, "");
+        if (text.length > 0) return false;
+        // Join with previous node (moves caret to end of previous line)
+        return editor.commands.joinBackward();
+      },
+    };
   },
 });
 
@@ -278,7 +322,6 @@ function runsFromDoc(docJSON){
 }
 
 function createEditor(mount, p, labels){
-  // Build initial content (from saved html or runs → HTML)
   const initialHTML = p.html && p.html.trim()
     ? p.html
     : (() => {
@@ -299,9 +342,11 @@ function createEditor(mount, p, labels){
   const editor = new Editor({
     element: mount,
     extensions: [
-      StarterKit,   // paragraph, text, bold, italic, lists, history, etc.
-      Underline,    // extra mark
-      ExhibitChip,  // our atomic node
+      StarterKit,
+      Underline,
+      ExhibitChip,
+      ListExitFix,     // 1st backspace exits empty list item
+      ParagraphJoinFix // 2nd backspace (empty paragraph) joins with previous
     ],
     content: initialHTML,
     editorProps: { attributes: { class: "para-editor", "aria-label":"Paragraph editor" } },
@@ -348,7 +393,6 @@ function moveExhibit(pId, exId, dir){
   [ex[idx], ex[j]]=[ex[j], ex[idx]];
   saveParas(renumber(list));
 
-  // Update chip labels in editor
   const labels=computeLabels(loadParas());
   const ed=EDITORS.get(pId);
   if(ed){
@@ -364,7 +408,6 @@ function moveExhibit(pId, exId, dir){
 function removeExhibit(pId, exId) {
   histPush();
 
-  // 1) Update model
   const list = loadParas().sort(byNo);
   const i = list.findIndex(pp => pp.id === pId);
   if (i === -1) return;
@@ -374,11 +417,8 @@ function removeExhibit(pId, exId) {
   p.runs     = (p.runs || []).filter(r => !(r.type === "exhibit" && r.exId === exId));
   saveParas(renumber(list));
 
-  // 2) Remove the chip in the live editor via privileged command (sets meta flag)
   const ed = EDITORS.get(pId);
-  if (ed) {
-    ed.commands.removeExhibitChip(exId);
-  }
+  if (ed) ed.commands.removeExhibitChip(exId);
 }
 
 /* ---------- Affidavit linkage ---------- */
@@ -451,7 +491,7 @@ function buildToolbar(p){
   const btn=(t,a,title)=>elx("button",{type:"button",innerText:t,title:title||t,dataset:{a}});
   tb.append(
     btn("B","bold","Bold"), btn("i","italic","Italic"), btn("U","underline","Underline"),
-    elx("span",{className:"sep"}), btn("•","bullet","Toggle bulleted list"), btn("1.","ordered","Toggle ordered list"),
+    elx("span",{className:"sep"}), btn("•","bullet","Toggle bulleted list"), btn("a.","ordered","Toggle a./b./c. list"),
     elx("span",{className:"sep"}), btn("→","indent","Indent"), btn("←","outdent","Outdent"),
     elx("span",{className:"sep"}), btn("Clear","clear","Clear formatting")
   );
@@ -573,8 +613,7 @@ function renderRow(p,total,labels){
 function renderParagraphs(){
   const container=$("#paraList"); if(!container) return;
 
-  // Destroy old editors
-  for (const [pid,ed] of EDITORS){ try{ed.destroy();}catch{} }
+  for (const [,ed] of EDITORS){ try{ed.destroy();}catch{} }
   EDITORS.clear();
 
   const list=loadParas().sort(byNo).map(ensureRuns);
@@ -590,7 +629,6 @@ document.addEventListener("DOMContentLoaded", async ()=>{
 
   const back=$("#back"); if(back) back.onclick=()=>history.back();
 
-  // Label scheme toggle
   const toggle=$("#schemeToggle"), textEl=$("#schemeText");
   if(toggle){
     const cur=getExhibitScheme(); toggle.checked=(cur==="numbers"); if(textEl) textEl.textContent=toggle.checked?"Numbers":"Letters";
@@ -599,9 +637,19 @@ document.addEventListener("DOMContentLoaded", async ()=>{
 
   const ub=$("#undoBtn"), rb=$("#redoBtn"); if(ub) ub.onclick=undo; if(rb) rb.onclick=redo;
 
-  // Modal wires
-  docMetaModal=$("#docMetaModal"); docMetaForm=$("#docMetaForm"); docMetaErr=$("#docMetaErrors"); docMetaSave=$("#docMetaSave"); docMetaGuidance=$("#docMetaGuidance");
-  if(docMetaModal){ docMetaModal.addEventListener("click",(e)=>{ if(e.target===docMetaModal){ e.preventDefault(); docMetaErr.textContent="Please complete the fields and click Save to continue."; } }); }
+  docMetaModal=$("#docMetaModal");
+  docMetaForm=$("#docMetaForm");
+  docMetaErr=$("#docMetaErrors");
+  docMetaSave=$("#docMetaSave");
+  docMetaGuidance=$("#docMetaGuidance");
+  if(docMetaModal){
+    docMetaModal.addEventListener("click",(e)=>{
+      if(e.target===docMetaModal){
+        e.preventDefault();
+        docMetaErr.textContent="Please complete the fields and click Save to continue.";
+      }
+    });
+  }
   if(docMetaSave) docMetaSave.onclick=onMetaSave;
 
   await migrate();

@@ -1,288 +1,118 @@
-// affidavit-body.js — exhibits + paragraph editor + metadata intake + RTE
-// Variant: cleaned to use ZWSP-only cushions (no visible space) and remove visible-space deletion branches
+// affidavit-body.js — TipTap-only editors per paragraph + atomic exhibit chips (Node)
+// No execCommand, no manual contentEditable handlers — purely TipTap.
+
+import { Editor, Node } from "https://esm.sh/@tiptap/core@2";
+import StarterKit from "https://esm.sh/@tiptap/starter-kit@2";
+import Underline from "https://esm.sh/@tiptap/extension-underline@2";
+import { Plugin } from "https://esm.sh/@tiptap/pm@2/state";
 
 import { LS, loadJSON, saveJSON, loadDocSchema, loadDocGuidance } from "./constants.js";
 
-/* ---------- DOM helpers ---------- */
+/* ---------- Tiny DOM helpers ---------- */
 const $ = (sel, el = document) => el.querySelector(sel);
-function el(tag, props = {}, ...children) {
+const elx = (tag, props = {}, ...children) => {
   const node = document.createElement(tag);
   if (props) {
     const { dataset, ...rest } = props;
-    if (rest && Object.keys(rest).length) Object.assign(node, rest);
-    if (dataset) for (const [k, v] of Object.entries(dataset)) { try { node.dataset[k] = v; } catch {} }
+    if (Object.keys(rest || {}).length) Object.assign(node, rest);
+    if (dataset) for (const [k, v] of Object.entries(dataset)) node.dataset[k] = v;
   }
   for (const c of children) if (c != null) node.append(c);
   return node;
-}
+};
 
 /* ---------- Exhibit scheme (letters | numbers) ---------- */
 const getExhibitScheme = () => localStorage.getItem(LS.EXHIBIT_SCHEME) || "letters";
 const setExhibitScheme = (s) => localStorage.setItem(LS.EXHIBIT_SCHEME, s);
-const indexToLetter = (idx) => { let n = idx + 1, s = ""; while (n > 0) { n--; s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26); } return s; };
-const labelFor = (idx, scheme) => scheme === "numbers" ? String(idx + 1) : indexToLetter(idx);
+const toLetters = (n)=>{let s="";for(let x=n+1;x>0;){x--;s=String.fromCharCode(65+(x%26))+s;x=Math.floor(x/26)}return s};
+const labelFor = (idx, scheme) => scheme === "numbers" ? String(idx + 1) : toLetters(idx);
 
-/* ---------- Storage access ---------- */
+/* ---------- Storage ---------- */
 const loadCase  = () => loadJSON(LS.CASE, {});
 const loadOath  = () => loadJSON(LS.OATH, null);
 const loadParas = () => loadJSON(LS.PARAS, []);
 const saveParas = (list) => saveJSON(LS.PARAS, list);
 
-/* ---------- History (Undo/Redo) ---------- */
+/* ---------- Undo/Redo at the model level ---------- */
 const MAX_HISTORY = 50;
-let UNDO_STACK = [];
-let REDO_STACK = [];
-const snapshotParas = () => localStorage.getItem(LS.PARAS) || "[]";
-function pushHistory() { UNDO_STACK.push(snapshotParas()); if (UNDO_STACK.length > MAX_HISTORY) UNDO_STACK.shift(); REDO_STACK = []; syncUndoRedoButtons(); }
-function restoreFrom(serialized) { localStorage.setItem(LS.PARAS, serialized); renderParagraphs(); syncUndoRedoButtons(); }
-const canUndo = () => UNDO_STACK.length > 0;
-const canRedo = () => REDO_STACK.length > 0;
-function undo() { if (!canUndo()) return; const cur = snapshotParas(); const prev = UNDO_STACK.pop(); REDO_STACK.push(cur); restoreFrom(prev); }
-function redo() { if (!canRedo()) return; const cur = snapshotParas(); const next = REDO_STACK.pop(); UNDO_STACK.push(cur); restoreFrom(next); }
-function syncUndoRedoButtons() { const ub = $("#undoBtn"), rb = $("#redoBtn"); if (!ub || !rb) return; ub.disabled = !canUndo(); rb.disabled = !canRedo(); }
+let UNDO = [], REDO = [];
+const snap = () => localStorage.getItem(LS.PARAS) || "[]";
+const histPush = () => { UNDO.push(snap()); if (UNDO.length>MAX_HISTORY) UNDO.shift(); REDO = []; syncUndoUI(); };
+const restore = (s) => { localStorage.setItem(LS.PARAS, s); renderParagraphs(); syncUndoUI(); };
+const canUndo = ()=> UNDO.length>0, canRedo=()=> REDO.length>0;
+function undo(){ if(!canUndo())return; const cur=snap(); const prev=UNDO.pop(); REDO.push(cur); restore(prev); }
+function redo(){ if(!canRedo())return; const cur=snap(); const nxt=REDO.pop(); UNDO.push(cur); restore(nxt); }
+function syncUndoUI(){ const ub=$("#undoBtn"), rb=$("#redoBtn"); if(!ub||!rb) return; ub.disabled=!canUndo(); rb.disabled=!canRedo(); }
 
-/* ---------- IndexedDB for files + document meta ---------- */
-const DB_NAME = "affidavitDB";
-const STORE   = "files";
-function openDB() {
-  return new Promise((res, rej) => {
-    const r = indexedDB.open(DB_NAME, 1);
-    r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id" }); };
-    r.onsuccess = () => res(r.result);
-    r.onerror   = () => rej(r.error);
-  });
-}
-async function writeDoc(doc) {
-  const db = await openDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put(doc);
-    tx.oncomplete = () => res();
-    tx.onerror = () => rej(tx.error);
-  });
-}
-async function readDoc(id) {
-  const db = await openDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction(STORE, "readonly");
-    const req = tx.objectStore(STORE).get(id);
-    req.onsuccess = () => res(req.result || null);
-    req.onerror = () => rej(req.error);
-  });
-}
-async function saveFileBlob(file) {
-  const db = await openDB();
-  return new Promise((res, rej) => {
-    const id = crypto.randomUUID();
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put({
-      id, name: file.name, type: file.type, size: file.size, blob: file,
-      uploadedAt: new Date().toISOString(),
-      pageCount: null,
-      meta: {}, system: {}, tags: []
-    });
-    tx.oncomplete = () => res(id);
-    tx.onerror    = () => rej(tx.error);
-  });
-}
-async function getFileBlob(id) {
-  const rec = await readDoc(id);
-  return rec ? { id: rec.id, name: rec.name, type: rec.type, blob: rec.blob } : null;
-}
+/* ---------- IndexedDB (files) ---------- */
+const DB="affidavitDB", STORE="files";
+const openDB=()=>new Promise((res,rej)=>{const r=indexedDB.open(DB,1);r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE,{keyPath:"id"});};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
+async function writeDoc(doc){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).put(doc);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
+async function readDoc(id){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction(STORE,"readonly");const q=tx.objectStore(STORE).get(id);q.onsuccess=()=>res(q.result||null);q.onerror=()=>rej(q.error);});}
+async function saveFileBlob(file){const db=await openDB();return new Promise((res,rej)=>{const id=crypto.randomUUID();const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).put({id,name:file.name,type:file.type,size:file.size,blob:file,uploadedAt:new Date().toISOString(),pageCount:null,meta:{},system:{},tags:[]});tx.oncomplete=()=>res(id);tx.onerror=()=>rej(tx.error);});}
 
-/* ---------- Optional: compute page count with PDF.js if available ---------- */
-async function computePdfPageCountFromBlob(blob) {
-  try {
-    if (!window.pdfjsLib || typeof window.pdfjsLib.getDocument !== "function") return null;
-    const url = URL.createObjectURL(blob);
-    const t = await window.pdfjsLib.getDocument({ url }).promise;
-    const pages = t.numPages || null;
-    URL.revokeObjectURL(url);
-    return pages;
-  } catch { return null; }
+/* ---------- PDF page count (optional) ---------- */
+async function pdfPages(blob){
+  try{ if(!window.pdfjsLib?.getDocument) return null;
+    const url=URL.createObjectURL(blob); const d=await window.pdfjsLib.getDocument({url}).promise; const n=d.numPages||null; URL.revokeObjectURL(url); return n;
+  }catch{ return null; }
 }
 
 /* ---------- Utilities ---------- */
-const byNumber = (a, b) => (a.number || 0) - (b.number || 0);
-const stripGuards = (s) => (s || "").replace(/\u200B/g, "");
-
-// Chip predicate
-const isChipEl = (n) => n && n.nodeType === 1 && n.classList?.contains("exh-chip");
-
-/* ---------- Guard helpers for ZWSP-only cushions ---------- */
-const LEFT_GUARD_TEXT  = "\u200B"; // ZWSP only
-const RIGHT_GUARD_TEXT = "\u200B"; // ZWSP only
-function isZwspText(n)  { return !!(n && n.nodeType === Node.TEXT_NODE && /\u200B/.test(n.nodeValue || "")); }
-
-/* ---------- Selection helpers for chips ---------- */
-function rangeContainsChip(range) {
-  if (!range || range.collapsed) return false;
-  const frag = range.cloneContents?.();
-  if (!frag) return false;
-  const probe = document.createElement("div");
-  probe.appendChild(frag);
-  return !!probe.querySelector(".exh-chip");
-}
-function trimRangeToAvoidChips(range, root) {
-  const r = range.cloneRange();
-
-  // Move start forward past any chip
-  while (true) {
-    const sc = r.startContainer;
-    const so = r.startOffset;
-    if (!root.contains(sc)) break;
-
-    if (sc.nodeType === Node.ELEMENT_NODE) {
-      const child = sc.childNodes[so] || null;
-      if (isChipEl(child)) {
-        const after = child.nextSibling;
-        if (!after) return null;
-        r.setStart(after, after.nodeType === Node.TEXT_NODE ? 0 : 0);
-        continue;
-      }
-    }
-    if (sc.nodeType === Node.ELEMENT_NODE && isChipEl(sc)) {
-      const after = sc.nextSibling;
-      if (!after) return null;
-      r.setStart(after, after.nodeType === Node.TEXT_NODE ? 0 : 0);
-      continue;
-    }
-    break;
-  }
-
-  // Move end backward before any chip
-  while (true) {
-    const ec = r.endContainer;
-    const eo = r.endOffset;
-    if (!root.contains(ec)) break;
-
-    if (ec.nodeType === Node.ELEMENT_NODE) {
-      const idx = eo - 1;
-      const child = ec.childNodes[idx] || null;
-      if (isChipEl(child)) {
-        const before = child.previousSibling;
-        if (!before) return null;
-        const len = before.nodeType === Node.TEXT_NODE ? (before.nodeValue || "").length : (before.childNodes?.length || 0);
-        r.setEnd(before, len);
-        continue;
-      }
-    }
-    if (ec.nodeType === Node.ELEMENT_NODE && isChipEl(ec)) {
-      const before = ec.previousSibling;
-      if (!before) return null;
-      const len = before.nodeType === Node.TEXT_NODE ? (before.nodeValue || "").length : (before.childNodes?.length || 0);
-      r.setEnd(before, len);
-      continue;
-    }
-    break;
-  }
-
-  return r.collapsed ? null : r;
-}
-
-/* ---------- Clipboard text writer (fallback safe) ---------- */
-async function writePlainTextToClipboard(txt) {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(txt);
-      return true;
-    }
-  } catch (_) {}
-  const ta = document.createElement("textarea");
-  ta.style.position = "fixed"; ta.style.opacity = "0";
-  ta.value = txt;
-  document.body.appendChild(ta);
-  ta.select();
-  try { document.execCommand("copy"); } catch (_) {}
-  document.body.removeChild(ta);
-  return true;
-}
+const byNo=(a,b)=>(a.number||0)-(b.number||0);
+const stripZWSP=(s)=> (s||"").replace(/\u200B/g,"");
 
 /* ---------- Model helpers ---------- */
-const createParagraph = () => ({
-  id: crypto.randomUUID(),
-  number: 0,
-  text: "",
-  html: "",
-  exhibits: [],
-  runs: [{ type: "text", text: "" }]
-});
-function newParagraph() { const list = loadParas().sort(byNumber); const p = createParagraph(); p.number = list.length + 1; return p; }
-function renumber(list) { list.forEach((p, i) => { p.number = i + 1; }); return list; }
-function ensureRuns(p) {
-  if (!p) return p;
-  if (!Array.isArray(p.runs)) {
-    const baseText = (p.text || "");
-    const textRun = { type: "text", text: baseText };
-    const exRuns  = Array.isArray(p.exhibits) ? p.exhibits.map(ex => ({ type: "exhibit", exId: ex.id })) : [];
-    p.runs = [textRun, ...exRuns];
-  }
-  if (typeof p.html !== "string") p.html = "";
-  return p;
+const newPara = ()=>({ id:crypto.randomUUID(), number:0, html:"", exhibits:[], runs:[{type:"text",text:""}]});
+function addPara(){ histPush(); const list=loadParas().sort(byNo); const p=newPara(); p.number=list.length+1; list.push(p); saveParas(list); }
+function renumber(list){ list.forEach((p,i)=>p.number=i+1); return list; }
+function ensureRuns(p){ if(!Array.isArray(p.runs)) p.runs=[{type:"text",text:""}]; if(typeof p.html!=="string") p.html=""; return p; }
+function upsertParagraph(patch){ histPush(); const list=loadParas().sort(byNo); const i=list.findIndex(x=>x.id===patch.id); if(i===-1) list.push(patch); else list[i]={...list[i],...patch}; saveParas(renumber(list)); }
+function moveToPos(id,target1){ histPush(); const list=loadParas().sort(byNo); const from=list.findIndex(p=>p.id===id); if(from===-1)return; const it=list.splice(from,1)[0]; const idx=Math.max(0,Math.min(target1-1,list.length)); list.splice(idx,0,it); saveParas(renumber(list)); }
+function removeParagraph(id){ histPush(); const list=loadParas().filter(p=>p.id!==id).sort(byNo); saveParas(renumber(list)); const ed=EDITORS.get(id); if(ed){ ed.destroy(); EDITORS.delete(id);} }
+
+/* ---------- Migrations ---------- */
+async function migrate() {
+  let changed=false; const list=loadParas();
+  for(const p of list){ ensureRuns(p); if(typeof p.html!=="string"){p.html="";changed=true;} }
+  if(changed) saveParas(list);
 }
 
-/* ---------- One-time migration ---------- */
-async function migrateParasIfNeeded() {
-  let changed = false;
-  const list = loadParas();
-  for (const p of list) {
-    if (p && p.exhibitFileId && !Array.isArray(p.exhibits)) {
-      let name = "Exhibit.pdf";
-      try { const rec = await getFileBlob(p.exhibitFileId); if (rec?.name) name = rec.name; } catch {}
-      p.exhibits = [{ id: crypto.randomUUID(), fileId: p.exhibitFileId, name }];
-      delete p.exhibitFileId;
-      changed = true;
-    } else if (p && !Array.isArray(p.exhibits)) { p.exhibits = []; changed = true; }
-    const before = JSON.stringify(p.runs || null);
-    ensureRuns(p);
-    if (JSON.stringify(p.runs || null) !== before) changed = true;
-    if (typeof p.html !== "string") { p.html = ""; changed = true; }
-  }
-  if (changed) saveParas(list);
-}
-
-/* ---------- Exhibit labels ---------- */
-function computeExhibitLabels(paras) {
-  const scheme = getExhibitScheme();
-  const map = new Map();
-  let idx = 0;
-  paras.sort(byNumber).forEach(p => {
-    (p.exhibits || []).forEach(ex => { map.set(ex.id, labelFor(idx, scheme)); idx++; });
-  });
+/* ---------- Labels ---------- */
+function computeLabels(paras){
+  const scheme=getExhibitScheme(); const map=new Map(); let idx=0;
+  paras.sort(byNo).forEach(p=> (p.exhibits||[]).forEach(ex=>{ map.set(ex.id,labelFor(idx,scheme)); idx++; }));
   return map;
 }
 
-/* ---------- Heading & intro ---------- */
-function partyDisplayName(p) { if (!p) return ""; const company = (p.company || "").trim(); const person = [p.first || "", p.last || ""].map(s => s.trim()).filter(Boolean).join(" ").trim(); return company || person || ""; }
-const collectNames = (list) => (Array.isArray(list) ? list : []).map(partyDisplayName).map(s => s.trim()).filter(Boolean);
-function listWithEtAl(names, limit = 3) { return names.length <= limit ? names.join(", ") : names.slice(0, limit).join(", ") + ", et al."; }
-function roleLabelFor(side, count, isMotion, movingSide) {
-  const isPlaintiff = side === "plaintiff";
-  const base = isPlaintiff ? (count > 1 ? "Plaintiffs" : "Plaintiff") : (count > 1 ? "Defendants" : "Defendant");
-  if (!isMotion) return base;
-  const isMovingThisSide = movingSide === (isPlaintiff ? "plaintiff" : "defendant");
-  const suffix = isMovingThisSide ? (count > 1 ? "/Moving Parties" : "/Moving Party") : (count > 1 ? "/Responding Parties" : "/Responding Party");
-  return base + suffix;
+/* ---------- Heading & intro (unchanged) ---------- */
+function partyName(p){ if(!p)return""; const co=(p.company||"").trim(); const person=[p.first||"",p.last||""].map(s=>s.trim()).filter(Boolean).join(" ").trim(); return co||person||""; }
+const listNames=(arr)=> (Array.isArray(arr)?arr:[]).map(partyName).filter(Boolean);
+function etAl(names,limit=3){ return names.length<=limit?names.join(", "):names.slice(0,limit).join(", ")+", et al."; }
+function roleLabel(side,count,isMotion,movingSide){
+  const isPl=side==="plaintiff"; const base=isPl?(count>1?"Plaintiffs":"Plaintiff"):(count>1?"Defendants":"Defendant");
+  if(!isMotion) return base;
+  const moving = movingSide === (isPl? "plaintiff":"defendant");
+  const suf = moving ? (count>1?"/Moving Parties":"/Moving Party") : (count>1?"/Responding Parties":"/Responding Party");
+  return base + suf;
 }
-function formatCourtFile(cf = {}) { const parts = [cf.year, cf.assign, cf.suffix].map(v => (v || "").toString().trim()).filter(Boolean); return parts.length ? ("CV-" + parts.join("-")) : ""; }
-function buildGeneralHeading(caseData = {}) {
-  const courtName = (caseData.courtName || "ONTARIO SUPERIOR COURT OF JUSTICE").trim();
-  const fileNo    = formatCourtFile(caseData.courtFile || {});
-  const plRaw = collectNames(caseData.plaintiffs || []);
-  const dfRaw = collectNames(caseData.defendants || []);
-  const pl = plRaw.length ? listWithEtAl(plRaw, 3) : "[Add plaintiffs in the General Heading form]";
-  const df = dfRaw.length ? listWithEtAl(dfRaw, 3) : "[Add defendants in the General Heading form]";
-  const isMotion = !!(caseData.motion && caseData.motion.isMotion);
-  const movingSide = caseData.motion ? caseData.motion.movingSide : null;
-  const plRole = roleLabelFor("plaintiff", plRaw.length || 1, isMotion, movingSide);
-  const dfRole = roleLabelFor("defendant", dfRaw.length || 1, isMotion, movingSide);
-  return { l1: fileNo ? `Court File No. ${fileNo}` : "Court File No.", l2: courtName, l3: "BETWEEN:", l4: pl, l5: plRole, l6: "-AND-", l7: df, l8: dfRole };
+const fmtFile=(cf={})=>{const parts=[cf.year,cf.assign,cf.suffix].map(v=>(v||"").toString().trim()).filter(Boolean); return parts.length?("CV-"+parts.join("-")):"";};
+function buildHeading(c={}) {
+  const file=fmtFile(c.courtFile||{}); const plRaw=listNames(c.plaintiffs||[]); const dfRaw=listNames(c.defendants||[]);
+  const isMotion=!!(c.motion&&c.motion.isMotion); const movingSide=c.motion?c.motion.movingSide:null;
+  return {
+    l1: file?`Court File No. ${file}`:"Court File No.",
+    l2: (c.courtName||"ONTARIO SUPERIOR COURT OF JUSTICE").trim(),
+    l3: "BETWEEN:", l4: plRaw.length?etAl(plRaw,3):"[Add plaintiffs in the General Heading form]",
+    l5: roleLabel("plaintiff", plRaw.length||1, isMotion, movingSide),
+    l6: "-AND-",
+    l7: dfRaw.length?etAl(dfRaw,3):"[Add defendants in the General Heading form]",
+    l8: roleLabel("defendant", dfRaw.length||1, isMotion, movingSide),
+  };
 }
-function renderHeading() {
-  const c  = loadCase();
-  const gh = buildGeneralHeading(c);
-  const container = $("#heading"); if (!container) return;
-  container.innerHTML = `
+function renderHeading(){
+  const gh=buildHeading(loadCase()); const c=$("#heading"); if(!c) return;
+  c.innerHTML=`
     <div class="gh">
       <div class="gh-line gh-file-no">${gh.l1}</div>
       <div class="gh-line gh-court">${gh.l2}</div>
@@ -294,1033 +124,495 @@ function renderHeading() {
       <div class="gh-line gh-role gh-def-role">${gh.l8}</div>
     </div>`;
 }
-function renderIntro() {
-  const c = loadCase(); const d = c.deponent || {}; const oath = (loadOath() || "").toLowerCase();
-  const nameOf = (person) => [person?.first, person?.last].filter(Boolean).join(" ").trim();
-  const roleLower = (d.role || "").toLowerCase();
-  let fullName = nameOf(d);
-  if (!fullName) {
-    if (roleLower === "plaintiff" && Array.isArray(c.plaintiffs) && c.plaintiffs[0]) fullName = nameOf(c.plaintiffs[0]);
-    if (roleLower === "defendant" && Array.isArray(c.defendants) && c.defendants[0]) fullName = nameOf(c.defendants[0]);
-  }
-  const cityPart = d.city ? `of the City of ${d.city}` : "";
-  const provincePart = d.prov ? `in the Province of ${d.prov}` : "";
-  let capacityPhrase = "";
-  switch (roleLower) {
+function renderIntro(){
+  const c=loadCase(); const d=c.deponent||{}; const oath=(loadOath()||"").toLowerCase();
+  const nameOf = (p)=>[p?.first,p?.last].filter(Boolean).join(" ").trim();
+  const role=(d.role||"").toLowerCase();
+  let full=nameOf(d)|| (role==="plaintiff" && c.plaintiffs?.[0]? nameOf(c.plaintiffs[0]) : (role==="defendant" && c.defendants?.[0]? nameOf(c.defendants[0]) : ""));
+  const city = d.city?`of the City of ${d.city}`:"";
+  const prov = d.prov?`in the Province of ${d.prov}`:"";
+  let cap="";
+  switch(role){
     case "plaintiff":
-    case "defendant": capacityPhrase = `the ${roleLower}`; break;
-    case "lawyer":    capacityPhrase = "the lawyer for a party"; break;
+    case "defendant": cap=`the ${role}`; break;
+    case "lawyer": cap="the lawyer for a party"; break;
     case "officer":
-    case "employee": {
-      const side = d.roleSide === "plaintiff" ? "plaintiff" : (d.roleSide === "defendant" ? "defendant" : null);
-      const list = side === "plaintiff" ? (c.plaintiffs || []) : (c.defendants || []);
-      const party = Number.isInteger(d.rolePartyIndex) ? (list[d.rolePartyIndex] || null) : null;
-      const companyName = party ? partyDisplayName(party) : "";
-      capacityPhrase = companyName
-        ? (d.roleDetail ? `the ${d.roleDetail} of ${companyName}${side ? (side === "plaintiff" ? ", the plaintiff" : ", the defendant") : ""}` : `an ${roleLower} of ${companyName}`)
-        : (d.roleDetail ? `the ${d.roleDetail} of a party` : `an ${roleLower} of a party`);
-      break;
-    }
-    default: capacityPhrase = d.role ? `the ${d.role}` : "";
+    case "employee": cap=d.roleDetail?`the ${d.roleDetail} of a party`:`an ${role} of a party`; break;
+    default: cap=d.role?`the ${d.role}`:"";
   }
-  const oathText = oath === "swear" ? "MAKE OATH AND SAY:" : "AFFIRM:";
-  const parts = [fullName ? `I, <strong>${fullName}</strong>` : "I,", cityPart, provincePart, capacityPhrase || null].filter(Boolean);
-  const intro = $("#intro"); if (!intro) return;
-  intro.innerHTML = `<h2>Affidavit of ${fullName || ""}</h2><p class="mt-12">${parts.join(", ")}, ${oathText}</p>`;
+  const oathText = oath==="swear" ? "MAKE OATH AND SAY:" : "AFFIRM:";
+  const parts = [full?`I, <strong>${full}</strong>`:"I,", city, prov, cap||null].filter(Boolean);
+  const intro=$("#intro"); if(!intro) return;
+  intro.innerHTML=`<h2>Affidavit of ${full||""}</h2><p class="mt-12">${parts.join(", ")}, ${oathText}</p>`;
 }
 
-/* ---------- Sanitizer (allow a tiny HTML subset) ---------- */
-function sanitizeHTML(inputHTML) {
-  const ALLOWED = new Set(["B","STRONG","I","EM","U","UL","OL","LI","BR","SPAN","#text"]);
-  const container = document.createElement("div");
-  container.innerHTML = inputHTML || "";
+/* --- TipTap ExhibitChip: inline atomic node with hard delete guard --- */
+const ExhibitChip = Node.create({
+  name: "exhibitChip",
+  group: "inline",
+  inline: true,
+  atom: true,
+  selectable: false,
+  draggable: false,
+  isolating: true, // safer edits around the atom
 
-  function clean(node) {
-    if (node.nodeType === Node.TEXT_NODE) return node.nodeValue;
+  addAttributes() {
+    return {
+      exId:  { default: "" },
+      label: { default: "?" },
+    };
+  },
 
-    const tag = node.tagName;
-    if (!ALLOWED.has(tag)) {
-      let buf = "";
-      node.childNodes.forEach(ch => { buf += clean(ch); });
-      return buf;
-    }
+  parseHTML() {
+    return [{
+      tag: 'span.exh-chip[data-ex-id]',
+      getAttrs: el => ({
+        exId: el.getAttribute("data-ex-id") || "",
+        label: (el.textContent || "").replace(/^exhibit\s+"?(.+?)"?$/i, "$1") || "?"
+      }),
+    }];
+  },
 
-    if (tag === "SPAN") {
-      const cls = node.classList;
-      if (!cls || !cls.contains("exh-chip")) {
-        let buf = "";
-        node.childNodes.forEach(ch => { buf += clean(ch); });
-        return buf;
-      }
-    }
+  renderHTML({ HTMLAttributes }) {
+    const { exId, label } = HTMLAttributes;
+    // The chip itself is clean; ZWSP padding is added by the insertion command.
+    return ["span",
+      { class: "exh-chip", "data-ex-id": exId, contenteditable: "false" },
+      `exhibit "${label}"`
+    ];
+  },
 
-    // Intentionally do NOT persist custom list-style attrs; use browser defaults
-    let open = `<${tag.toLowerCase()}`;
-    if (tag === "SPAN" && node.classList.contains("exh-chip")) {
-      const exId = node.getAttribute("data-ex-id") || node.dataset.exId || "";
-      open += ` class="exh-chip" data-ex-id="${exId}" contenteditable="false"`;
-    }
-    open += ">";
+  addCommands() {
+    return {
+      insertExhibitChip:
+        (attrs) =>
+        ({ chain }) => {
+          const { exId, label } = attrs || {};
+          if (!exId) return false;
+          return chain()
+            .insertContent([
+              { type: "text", text: "\u200B" },           // left cushion (invisible)
+              { type: this.name, attrs: { exId, label } },// the atom
+              { type: "text", text: "\u200B" },           // right cushion (invisible)
+            ])
+            .run();
+        },
 
-    let inner = "";
-    node.childNodes.forEach(ch => { inner += clean(ch); });
-    const close = `</${tag.toLowerCase()}>`;
-    return open + inner + close;
-  }
+      // Programmatic removal only (used by removeExhibit)
+      removeExhibitChip:
+        (exId) =>
+        ({ state, dispatch, tr }) => {
+          if (!exId) return false;
+          let fromPos = null, toPos = null;
+          state.doc.descendants((node, pos) => {
+            if (node.type.name === "exhibitChip" && node.attrs.exId === exId) {
+              fromPos = pos;
+              toPos = pos + node.nodeSize;
+              return false; // stop walking
+            }
+          });
+          if (fromPos == null) return false;
+          const tx = tr.setMeta("allowChipRemoval", true).delete(fromPos, toPos);
+          if (dispatch) dispatch(tx);
+          return true;
+        },
+    };
+  },
 
-  let out = "";
-  container.childNodes.forEach(ch => { out += clean(ch); });
-  return out;
-}
+  addKeyboardShortcuts() {
+    return {
+      // If Backspace at the very start of a list item that begins with a chip (or its leading ZWSP),
+      // lift the list item instead of deleting the chip.
+      Backspace: ({ editor }) => {
+        const { $from } = editor.state.selection;
+        const atStart = $from.parentOffset === 0;
+        if (!editor.isActive("listItem") || !atStart) return false;
 
-/* ---------- Chips (+ caret guards) ---------- */
-function makeExhibitChip(exId, labelText) {
-  const chip = document.createElement("span");
-  chip.className = "exh-chip";
-  chip.textContent = `exhibit "${labelText || "?"}"`;
-  chip.setAttribute("data-ex-id", exId);
-  chip.contentEditable = "false";
-  chip.setAttribute("draggable", "false");
-  chip.setAttribute("tabindex", "-1");
-  return chip;
-}
-function makeChipWithGuards(exId, labelText) {
-  // ZWSP on both sides
-  const leftGuard  = document.createTextNode(LEFT_GUARD_TEXT);
-  const chip       = makeExhibitChip(exId, labelText);
-  const rightGuard = document.createTextNode(RIGHT_GUARD_TEXT);
-  return [leftGuard, chip, rightGuard];
-}
-function appendChipWithGuards(parent, exId, labelText) {
-  const trio = makeChipWithGuards(exId, labelText);
-  trio.forEach(n => parent.appendChild(n));
-}
-function ensureGuardsAroundChip(chip) {
-  const prev = chip.previousSibling;
-  const next = chip.nextSibling;
+        const first = $from.parent.firstChild;
+        const looksChipLead =
+          (first && first.type.name === "text" && first.text === "\u200B" &&
+            first.nextSibling && first.nextSibling.type.name === "exhibitChip") ||
+          (first && first.type.name === "exhibitChip");
 
-  if (!(prev && prev.nodeType === Node.TEXT_NODE && prev.nodeValue === LEFT_GUARD_TEXT)) {
-    chip.parentNode?.insertBefore(document.createTextNode(LEFT_GUARD_TEXT), chip);
-  }
+        return looksChipLead ? editor.commands.liftListItem("listItem") : false;
+      },
+    };
+  },
 
-  if (!(next && next.nodeType === Node.TEXT_NODE && next.nodeValue === RIGHT_GUARD_TEXT)) {
-    chip.parentNode?.insertBefore(document.createTextNode(RIGHT_GUARD_TEXT), chip.nextSibling);
-  }
-}
-
-/* ---------- Inline editor (runs <-> DOM chips + RTE) ---------- */
-function renderEditorFromParagraph(p, labels) {
-  const ed = document.createElement("div");
-  ed.className = "para-editor";
-  ed.contentEditable = "true";
-  ed.setAttribute("data-paragraph-id", p.id);
-
-  if (p.html) {
-    ed.innerHTML = p.html;
-  } else {
-    const runs = Array.isArray(p.runs) ? p.runs : [{ type: "text", text: p.text || "" }];
-    for (const r of runs) {
-      if (r?.type === "text") ed.append(document.createTextNode(r.text || ""));
-      else if (r?.type === "exhibit" && r.exId) {
-        const lab = labels?.get(r.exId) || "?";
-        appendChipWithGuards(ed, r.exId, lab);
-      }
-    }
-    if (!ed.firstChild) ed.append(document.createTextNode(""));
-  }
-
-  // Refresh chip labels + ensure guards exist
-  ed.querySelectorAll(".exh-chip").forEach(ch => {
-    const exId = ch.getAttribute("data-ex-id");
-    const lab  = exId ? (labels.get(exId) || "?") : "?";
-    ch.textContent = `exhibit "${lab}"`;
-    ch.contentEditable = "false";
-    ch.setAttribute("draggable", "false");
-    ensureGuardsAroundChip(ch);
-  });
-
-  return ed;
-}
-function collectRunsFromEditor(editorEl) {
-  const out = [];
-  const pushText = (txt) => {
-    const cleaned = stripGuards(txt);
-    if (!cleaned) return;
-    const last = out[out.length - 1];
-    if (last && last.type === "text") last.text += cleaned;
-    else out.push({ type: "text", text: cleaned });
-  };
-
-  for (const node of editorEl.childNodes) {
-    if (node.nodeType === Node.TEXT_NODE) { pushText(node.nodeValue || ""); continue; }
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      const elx = node;
-      if (elx.classList.contains("exh-chip")) {
-        const exId = elx.getAttribute("data-ex-id") || elx.dataset.exId || "";
-        if (exId) out.push({ type: "exhibit", exId });
-      } else {
-        const walker = document.createTreeWalker(elx, NodeFilter.SHOW_ALL, null);
-        let n, buf = "";
-        while ((n = walker.nextNode())) {
-          if (n.nodeType === Node.TEXT_NODE) buf += n.nodeValue || "";
-          if (n.nodeType === Node.ELEMENT_NODE && n.classList?.contains("exh-chip")) {
-            const id = n.getAttribute("data-ex-id") || n.dataset.exId || "";
-            if (id) out.push({ type: "exhibit", exId: id });
-          }
-        }
-        pushText(buf);
-      }
-    }
-  }
-  return out;
-}
-
-/* ---------- Smart-backspace helpers (for list items that start with guard+chip) ---------- */
-function closestTag(el, tag) {
-  tag = tag.toUpperCase();
-  while (el && el.nodeType === 1) {
-    if (el.tagName === tag) return el;
-    el = el.parentElement;
-  }
-  return null;
-}
-
-// LI starts with LEFT_GUARD_TEXT + CHIP (or CHIP directly)
-function liStartsWithChip(li) {
-  if (!li) return false;
-  let first = li.firstChild;
-  while (first && first.nodeType === Node.TEXT_NODE && (first.nodeValue || "") === "") first = first.nextSibling;
-  if (!first) return false;
-  if (first.nodeType === Node.TEXT_NODE && first.nodeValue === LEFT_GUARD_TEXT) {
-    const second = first.nextSibling;
-    return isChipEl(second);
-  }
-  return isChipEl(first);
-}
-
-// Caret detection at the VERY start of a chip-leading <li>
-function caretAtStartOfLiWithChip(range) {
-  if (!range || !range.collapsed) return null;
-  const li = closestTag(range.startContainer, "LI");
-  if (!li) return null;
-
-  // Determine the first meaningful node
-  let first = li.firstChild;
-  while (first && first.nodeType === Node.TEXT_NODE && first.nodeValue === "") first = first.nextSibling;
-
-  const startsWithGuardThenChip =
-    first && first.nodeType === Node.TEXT_NODE && first.nodeValue === LEFT_GUARD_TEXT && isChipEl(first.nextSibling);
-  const startsWithChip = isChipEl(first);
-
-  if (!(startsWithGuardThenChip || startsWithChip)) return null;
-
-  const sc = range.startContainer;
-  const so = range.startOffset;
-
-  if (sc === li && so === 0) return li;                       // caret at start of LI
-  if (startsWithGuardThenChip && sc === first && so <= 1) return li; // inside guard at its start
-  if (sc && sc.nodeType === Node.TEXT_NODE && so === 0 && isChipEl(sc.nextSibling)) return li;
-
-  return null;
-}
-
-function shouldOutdentAtCaret(range) {
-  if (!range || !range.collapsed) return null;
-
-  // Find containing LI
-  let container = range.startContainer;
-  if (container.nodeType === Node.ELEMENT_NODE) {
-    const childAt = container.childNodes[range.startOffset] || container.childNodes[range.startOffset - 1] || container;
-    const liFromProbe = closestTag(childAt, "LI");
-    if (liFromProbe) container = liFromProbe;
-  }
-  const li = closestTag(container, "LI");
-  if (!li) return null;
-
-  // Early check: if LI starts with guard+chip (or chip), outdent on backspace at start/cushion
-  const sc = range.startContainer;
-  const so = range.startOffset;
-
-  if (liStartsWithChip(li)) {
-    if (sc === li && so === 0) return li;
-
-    const first = li.firstChild;
-    if (first && first.nodeType === Node.TEXT_NODE && first.nodeValue === LEFT_GUARD_TEXT) {
-      if (sc === first) return li;
-      const afterGuard = first.nextSibling;
-      if (isChipEl(afterGuard) && so === 0 && sc.nodeType === Node.TEXT_NODE) return li;
-    }
-
-    const firstNode = li.firstChild;
-    if (isChipEl(firstNode) && sc === li && so === 0) return li;
-
-    if (sc && sc.nodeType === Node.TEXT_NODE && so === 0 && isChipEl(sc.nextSibling)) return li;
-  }
-
-  return null;
-}
-
-function safeOutdentFromLi(editor) {
-  editor.focus();
-  document.execCommand("outdent", false, null);
-}
-
-/* === Chip protection (hardened; chips are non-deletable, text around is editable) === */
-function protectChips(editor) {
-  let _isComposing = false;
-  editor.addEventListener("compositionstart", () => { _isComposing = true; });
-  editor.addEventListener("compositionend",   () => { _isComposing = false; });
-
-  // Clicking a chip places caret after right guard
-  editor.addEventListener("mousedown", (e) => {
-    const t = e.target;
-    if (isChipEl(t)) {
-      e.preventDefault();
-      ensureGuardsAroundChip(t);
-      const rightGuard = t.nextSibling;
-      const r = document.createRange();
-      if (rightGuard && rightGuard.nodeType === Node.TEXT_NODE) {
-        r.setStart(rightGuard, rightGuard.nodeValue.length);
-      } else {
-        const guard = document.createTextNode(RIGHT_GUARD_TEXT);
-        t.parentNode?.insertBefore(guard, t.nextSibling);
-        r.setStart(guard, guard.nodeValue.length);
-      }
-      r.collapse(true);
-      const sel = window.getSelection();
-      sel.removeAllRanges(); sel.addRange(r);
-    }
-  });
-
-  // Block delete/cut operations that would touch chips + smart backspace for list-start chips
-  editor.addEventListener("beforeinput", (e) => {
-    if (_isComposing) return;
-    const t = e.inputType || "";
-    const isDelete =
-      t.startsWith("delete") ||
-      t === "deleteByCut" ||
-      t === "insertReplacementText";
-
-    const sel = document.getSelection?.();
-    if (!sel || sel.rangeCount === 0) return;
-    const r = sel.getRangeAt(0);
-
-    // SMART BACKSPACE EARLY: outdent must win before guard tweaks
-    if (t === "deleteContentBackward") {
-      const liEarly = caretAtStartOfLiWithChip(r) || shouldOutdentAtCaret(r);
-      if (liEarly) {
-        e.preventDefault();
-        e.stopPropagation();
-        safeOutdentFromLi(editor);
-        return;
-      }
-    }
-
-    if (!isDelete) return;
-
-    // If selection covers a chip, cancel deletion entirely
-    if (!r.collapsed && rangeContainsChip(r)) {
-      e.preventDefault(); e.stopPropagation();
-      return;
-    }
-
-    // Collapsed: prevent deleting a chip when caret is adjacent
-    const sc = r.startContainer, so = r.startOffset;
-
-    const neighborAt = (container, offset, dir) => {
-      if (container.nodeType === Node.TEXT_NODE) {
-        return dir < 0 ? container.previousSibling : container.nextSibling;
-      }
-      const idx = offset + (dir < 0 ? -1 : 0);
-      return container.childNodes[idx] || null;
+  addProseMirrorPlugins() {
+    const countChips = (doc) => {
+      let n = 0;
+      doc.descendants(node => { if (node.type?.name === "exhibitChip") n++; });
+      return n;
     };
 
-    const leftNode  = neighborAt(sc, so, -1);
-    const rightNode = neighborAt(sc, so, +1);
+    return [
+      new Plugin({
+        filterTransaction: (tr, state) => {
+          if (tr.getMeta("allowChipRemoval")) return true; // allowed programmatic removal
+          if (!tr.docChanged) return true;                 // selection/meta only
+          const before = countChips(state.doc);
+          const after  = countChips(tr.doc);
+          // Block any user action that would reduce chip count
+          return after >= before;
+        },
+      }),
+    ];
+  },
+});
 
-    const deletingBackward = t === "deleteContentBackward" || t === "deleteWordBackward" || t === "deleteSoftLineBackward";
-    const deletingForward  = t === "deleteContentForward"  || t === "deleteWordForward"  || t === "deleteHardLineForward";
+/* ---------- TipTap editors per paragraph ---------- */
+const EDITORS = new Map();
 
-    // Give smart-outdent another chance
-    if (deletingBackward) {
-      const li2 = caretAtStartOfLiWithChip(r) || shouldOutdentAtCaret(r);
-      if (li2) {
-        e.preventDefault();
-        e.stopPropagation();
-        safeOutdentFromLi(editor);
-        return;
-      }
-    }
-
-    // Normal delete within text nodes away from edges
-    if (sc.nodeType === Node.TEXT_NODE) {
-      if (deletingBackward && so > 0) return;
-      if (deletingForward  && so < (sc.nodeValue || "").length) return;
-    }
-
-    // Block deleting the chip itself
-    const willHitChipBackward = (deletingBackward && isChipEl(leftNode));
-    const willHitChipForward  = (deletingForward  && isChipEl(rightNode));
-
-    if (willHitChipBackward || willHitChipForward) {
-      e.preventDefault(); e.stopPropagation();
-      return;
-    }
-  }, { capture: true });
-
-  // Fallback for Backspace/Delete & context-menu Cut (also includes smart-backspace)
-  editor.addEventListener("keydown", (e) => {
-    if (e.key !== "Backspace" && e.key !== "Delete") return;
-
-    const sel = window.getSelection?.();
-    if (!sel || sel.rangeCount === 0) return;
-    const r = sel.getRangeAt(0);
-
-    // SMART BACKSPACE mirror (ensure outdent runs first)
-    if (e.key === "Backspace") {
-      const liEarly = caretAtStartOfLiWithChip(r) || shouldOutdentAtCaret(r);
-      if (liEarly) {
-        e.preventDefault();
-        e.stopPropagation();
-        safeOutdentFromLi(editor);
-        return;
-      }
-    }
-
-    // If selection spans a chip, block
-    if (!r.collapsed) {
-      const frag = r.cloneContents?.();
-      if (frag) {
-        const probe = document.createElement("div");
-        probe.appendChild(frag);
-        if (probe.querySelector(".exh-chip")) {
-          e.preventDefault(); e.stopPropagation();
-          return;
-        }
-      }
-    } else {
-      // Collapsed: check adjacency
-      const sc = r.startContainer, so = r.startOffset;
-
-      const neighborAt = (container, offset, dir) => {
-        if (container.nodeType === Node.TEXT_NODE) {
-          return dir < 0 ? container.previousSibling : container.nextSibling;
-        }
-        const idx = offset + (dir < 0 ? -1 : 0);
-        return container.childNodes[idx] || null;
-      };
-      const leftNode  = neighborAt(sc, so, -1);
-      const rightNode = neighborAt(sc, so, +1);
-
-      const hit =
-        (e.key === "Backspace" && isChipEl(leftNode)) ||
-        (e.key === "Delete"    && isChipEl(rightNode));
-      if (hit) { e.preventDefault(); e.stopPropagation(); return; }
-    }
-  }, { capture: true });
-
-  editor.addEventListener("cut", async (e) => {
-    const sel = window.getSelection?.();
-    if (!sel || sel.rangeCount === 0) return;
-    const r = sel.getRangeAt(0);
-    if (r.collapsed) return;
-
-    const frag = r.cloneContents?.();
-    if (!frag) return;
-    const probe = document.createElement("div");
-    probe.appendChild(frag);
-    if (probe.querySelector(".exh-chip")) {
-      e.preventDefault(); e.stopPropagation();
-      const txt = probe.textContent || "";
-      try {
-        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(txt);
-      } catch (_) {}
-      document.execCommand("delete", false, null);
-    }
-  }, { capture: true });
-
-  // Prevent dragging chips
-  editor.addEventListener("dragstart", (e) => { if (isChipEl(e.target)) e.preventDefault(); });
-
-  // Re-assert guards; keep editor from becoming empty
-  const mo = new MutationObserver(() => {
-    editor.querySelectorAll(".exh-chip").forEach(ensureGuardsAroundChip);
-    if (editor.childNodes.length === 0) editor.append(document.createTextNode(""));
-  });
-  mo.observe(editor, { childList: true, subtree: true, characterData: true });
-}
-
-/* ---------- RTE toolbar (dropdown removed) ---------- */
-function buildRteToolbar() {
-  const tb = el("div", { className: "rte-toolbar" });
-  const btn = (label, cmd, title) => el("button", { type: "button", innerText: label, title: title || label, dataset: { cmd } });
-  tb.append(
-    btn("B", "bold", "Bold (Cmd/Ctrl+B)"),
-    btn("i", "italic", "Italic (Cmd/Ctrl+I)"),
-    btn("U", "underline", "Underline (Cmd/Ctrl+U)"),
-    el("span", { className: "sep" }),
-    btn("•", "insertUnorderedList", "Bulleted list"),
-    btn("a.", "insertOrderedList", "Alphabetical list (a., b., c.)"),
-    el("span", { className: "sep" }),
-    btn("→", "indent", "Indent"),
-    btn("←", "outdent", "Outdent"),
-    el("span", { className: "sep" }),
-    btn("Clear", "removeFormat", "Clear direct formatting")
-  );
-  return tb;
-}
-function getActiveEditor(toolbar) {
-  let ed = toolbar?.nextElementSibling;
-  if (ed && ed.classList.contains("para-editor")) return ed;
-  return null;
-}
-function execOnEditor(ed, cmd, value = null) {
-  if (!ed) return;
-  ed.focus();
-  document.execCommand(cmd, false, value);
-}
-
-/* ---------- Save editor HTML (sanitized) + runs(chips) ---------- */
-function persistEditor(p, ed) {
-  const raw = ed.innerHTML;
-  const clean = sanitizeHTML(raw);
-  const runs = collectRunsFromEditor(ed);
-  upsertParagraph({ id: p.id, html: clean, runs });
-}
-
-/* ---------- Paragraph CRUD & reorder ---------- */
-function moveToPosition(id, target1) {
-  pushHistory();
-  const list = loadParas().sort(byNumber);
-  const fromIdx = list.findIndex(p => p.id === id);
-  if (fromIdx === -1) return;
-  const item = list.splice(fromIdx, 1)[0];
-  const insertIdx = Math.max(0, Math.min(target1 - 1, list.length));
-  list.splice(insertIdx, 0, item);
-  saveParas(renumber(list));
-}
-function addParagraph() { pushHistory(); const list = loadParas().sort(byNumber); list.push(newParagraph()); saveParas(renumber(list)); }
-function insertNewAt(target1) { pushHistory(); const list = loadParas().sort(byNumber); const p = createParagraph(); const idx = Math.max(0, Math.min(target1 - 1, list.length)); list.splice(idx, 0, p); saveParas(renumber(list)); }
-const insertNewBelow = (n) => { pushHistory(); insertNewAt(n + 1); };
-function upsertParagraph(patch) { pushHistory(); const list = loadParas().sort(byNumber); const i = list.findIndex(x => x.id === patch.id); if (i === -1) list.push(patch); else list[i] = { ...list[i], ...patch }; saveParas(renumber(list)); }
-function removeParagraph(id) { pushHistory(); const list = loadParas().filter(p => p.id !== id).sort(byNumber); saveParas(renumber(list)); }
-
-/* ---------- Exhibit mutations (with guards) ---------- */
-function addExhibits(pId, entries) {
-  pushHistory();
-  const list = loadParas().sort(byNumber);
-  const i = list.findIndex(p => p.id === pId);
-  if (i === -1) return;
-  const p = ensureRuns(list[i]);
-  p.exhibits = p.exhibits || [];
-  const newExIds = [];
-  for (const e of entries) {
-    const exId = crypto.randomUUID();
-    p.exhibits.push({ id: exId, fileId: e.fileId, name: e.name || "Exhibit" });
-    newExIds.push(exId);
+function runsFromDoc(docJSON){
+  const out=[];
+  const pushText=(t)=>{ const s=stripZWSP(t||""); if(!s) return; const last=out[out.length-1]; if(last?.type==="text") last.text+=s; else out.push({type:"text",text:s}); };
+  function walk(n){
+    if(!n) return;
+    if(n.type==="text"){ pushText(n.text||""); return; }
+    if(n.type==="exhibitChip"){ const id=n.attrs?.exId||""; if(id) out.push({type:"exhibit", exId:id}); return; }
+    (n.content||[]).forEach(walk);
   }
-  for (const exId of newExIds) p.runs.push({ type: "exhibit", exId });
-
-  if (typeof p.html === "string" && p.html.trim()) {
-    const tmp = document.createElement("div");
-    tmp.innerHTML = p.html;
-    newExIds.forEach(exId => appendChipWithGuards(tmp, exId, "?"));
-    p.html = sanitizeHTML(tmp.innerHTML);
-  }
-  saveParas(renumber(list));
-}
-function moveExhibit(pId, exId, dir) {
-  pushHistory();
-  const list = loadParas().sort(byNumber);
-  const i = list.findIndex(p => p.id === pId);
-  if (i === -1) return;
-  const p = ensureRuns(list[i]);
-  const exs = p.exhibits || [];
-  const idx = exs.findIndex(x => x.id === exId);
-  if (idx === -1) { saveParas(renumber(list)); return; }
-  const swapWith = idx + dir;
-  if (swapWith < 0 || swapWith >= exs.length) { saveParas(renumber(list)); return; }
-  [exs[idx], exs[swapWith]] = [exs[swapWith], exs[idx]];
-
-  if (typeof p.html === "string" && p.html) {
-    const tmp = document.createElement("div");
-    tmp.innerHTML = p.html;
-    const chip = tmp.querySelector(`.exh-chip[data-ex-id="${exId}"]`);
-    if (chip && chip.parentNode) {
-      const parent = chip.parentNode;
-      const leftGuard  = chip.previousSibling && chip.previousSibling.nodeType === Node.TEXT_NODE && isZwspText(chip.previousSibling) ? chip.previousSibling : (chip.previousSibling && chip.previousSibling.nodeType === Node.TEXT_NODE && chip.previousSibling.nodeValue === LEFT_GUARD_TEXT ? chip.previousSibling : null);
-      const rightGuard = chip.nextSibling     && chip.nextSibling.nodeType === Node.TEXT_NODE && isZwspText(chip.nextSibling) ? chip.nextSibling : null;
-
-      const group = [leftGuard, chip, rightGuard].filter(Boolean);
-
-      const siblings = Array.from(parent.childNodes);
-      const curFirst = group[0] || chip;
-      const curIdx = siblings.indexOf(curFirst);
-      let targetIdx = curIdx;
-
-      if (dir > 0) {
-        const afterGroup = siblings[curIdx + group.length] || null;
-        if (afterGroup) {
-          targetIdx = siblings.indexOf(afterGroup) + 1;
-        } else {
-          targetIdx = siblings.length;
-        }
-      } else {
-        const beforeGroup = siblings[curIdx - 1] || null;
-        if (beforeGroup) {
-          targetIdx = siblings.indexOf(beforeGroup);
-        } else {
-          targetIdx = 0;
-        }
-      }
-
-      group.forEach(n => parent.removeChild(n));
-      const ref = parent.childNodes[targetIdx] || null;
-      group.forEach(n => parent.insertBefore(n, ref));
-    }
-    p.html = sanitizeHTML(tmp.innerHTML);
-  }
-
-  saveParas(renumber(list));
-}
-function removeExhibit(pId, exId) {
-  pushHistory();
-  const list = loadParas().sort(byNumber);
-  const i = list.findIndex(p => p.id === pId);
-  if (i === -1) return;
-  const p = ensureRuns(list[i]);
-  p.exhibits = (p.exhibits || []).filter(x => x.id !== exId);
-  p.runs = (p.runs || []).filter(r => !(r.type === "exhibit" && r.exId === exId));
-  if (typeof p.html === "string" && p.html) {
-    const tmp = document.createElement("div");
-    tmp.innerHTML = p.html;
-    const chip = tmp.querySelector(`.exh-chip[data-ex-id="${exId}"]`);
-    if (chip) {
-      const left  = chip.previousSibling;
-      const right = chip.nextSibling;
-      if (left  && left.nodeType  === Node.TEXT_NODE && isZwspText(left))  left.remove();
-      chip.remove();
-      if (right && right.nodeType === Node.TEXT_NODE && isZwspText(right)) right.remove();
-    }
-    p.html = sanitizeHTML(tmp.innerHTML);
-  }
-  saveParas(renumber(list));
+  walk(docJSON);
+  return out.length?out:[{type:"text",text:""}];
 }
 
-/* ---------- Affidavit linkage helpers ---------- */
-function ensureAffidavitId() {
-  let id = localStorage.getItem(LS.AFFIDAVIT_ID);
-  if (!id) { id = crypto.randomUUID(); localStorage.setItem(LS.AFFIDAVIT_ID, id); }
-  return id;
-}
-function findExhibitLocationByFileId(fileId) {
-  const paras = loadParas().sort((a,b)=>(a.number||0)-(b.number||0));
-  for (const p of paras) {
-    const hit = (p.exhibits || []).find(ex => ex.fileId === fileId);
-    if (hit) return { paragraphId: p.id, paragraphNo: p.number, exhibitId: hit.id };
-  }
-  return null;
-}
-
-/* ---------- Document Intake Modal ---------- */
-let docMetaModal, docMetaForm, docMetaErr, docMetaSave, docMetaGuidance;
-let _pendingMetaQueue = []; // [{fileId, defaults}]
-let _currentMeta      = null;
-let _lastFocused = null;
-function lockBackground() { document.body.dataset._scrollY = String(window.scrollY || 0); document.body.style.top = `-${document.body.dataset._scrollY}px`; document.body.style.position = "fixed"; document.body.style.width = "100%"; }
-function unlockBackground() { const y = Number(document.body.dataset._scrollY || 0); document.body.style.position = ""; document.body.style.top = ""; document.body.style.width = ""; window.scrollTo(0, y); }
-function trapFocus(modalEl) {
-  const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
-  const nodes = () => Array.from(modalEl.querySelectorAll(FOCUSABLE)).filter(n => !n.hasAttribute("disabled"));
-  function onKey(e) {
-    if (e.key === "Escape") { e.preventDefault(); return; }
-    if (e.key !== "Tab") return;
-    const list = nodes(); if (!list.length) return;
-    const first = list[0], last = list[list.length - 1];
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-  }
-  modalEl.addEventListener("keydown", onKey);
-  modalEl._removeTrap = () => modalEl.removeEventListener("keydown", onKey);
-}
-function renderGuidanceBlock() {
-  const g = loadDocGuidance();
-  docMetaGuidance.innerHTML = "";
-  const title = el("h4", { innerText: "Why this matters" });
-  const p1    = el("p",  { innerText: g.intro });
-  const p2    = el("p",  { innerText: g.note });
-  const exH   = el("h4", { innerText: g.examplesTitle });
-  const list  = el("ul");
-  g.examples.forEach(txt => list.append(el("li", { innerText: txt })));
-  docMetaGuidance.append(title, p1, p2, exH, list);
-}
-function makeNoDateControl(forInputId) {
-  const wrap = document.createElement("div");
-  wrap.className = "field";
-  const id = forInputId + "-none";
-  const cb = document.createElement("input");
-  cb.type = "checkbox"; cb.id = id; cb.ariaLabel = "This document has no date";
-  const label = document.createElement("label"); label.htmlFor = id; label.textContent = "This document has no date";
-  wrap.append(cb, label);
-  return wrap;
-}
-async function openDocMetaForFile(fileId) {
-  const rec = await readDoc(fileId);
-  const defaults = rec?.meta || {};
-  openDocMetaModal({ fileId, defaults });
-}
-function openDocMetaModal(payload) {
-  _currentMeta = payload;
-  const schema = loadDocSchema(); const guidance = loadDocGuidance();
-  renderGuidanceBlock();
-  docMetaForm.innerHTML = "";
-  let dateFieldWrap = null;
-
-  schema.forEach(field => {
-    const wrap = el("div", { className: "field" });
-    const id = `docmeta-${field.key}`;
-    const labelText = field.label + (field.required ? " *" : "");
-    const label = el("label", { htmlFor: id, innerText: labelText });
-    let input;
-    const value = payload.defaults?.[field.key] ?? "";
-    switch (field.type) {
-      case "textarea": {
-        const ex = Array.isArray(guidance.examples) ? guidance.examples.slice(0, 3) : [];
-        const placeholder = ex.length ? `e.g., ${ex[0]}\n• ${ex[1] || ""}\n• ${ex[2] || ""}`.trim() : "e.g., Email from Jane Smith re: delivery delay";
-        input = el("textarea", { id, value, placeholder });
-        break;
-      }
-      case "select": {
-        input = el("select", { id });
-        const choices = field.choices || [];
-        choices.forEach(opt => input.append(el("option", { value: opt, innerText: opt })));
-        if (value && !choices.includes(value)) input.append(el("option", { value, innerText: value }));
-        if (value) input.value = value;
-        break;
-      }
-      case "date": {
-        input = el("input", { id, type: "date", value });
-        break;
-      }
-      default: {
-        input = el("input", { id, type: "text", value });
-      }
-    }
-    wrap.append(label, input);
-    docMetaForm.append(wrap);
-    if (field.type === "date") dateFieldWrap = wrap;
-  });
-
-  if (dateFieldWrap) {
-    const dateInput = dateFieldWrap.querySelector('input[type="date"]');
-    const noneCtrl = makeNoDateControl(dateInput.id);
-    dateFieldWrap.after(noneCtrl);
-    const noneCb = noneCtrl.querySelector('input[type="checkbox"]');
-    const prevNoDate = !!payload.defaults?.noDocDate; noneCb.checked = prevNoDate;
-    const syncDateState = () => { if (noneCb.checked) { dateInput.value = ""; dateInput.disabled = true; } else { dateInput.disabled = false; } };
-    syncDateState(); noneCb.addEventListener("change", syncDateState);
-  }
-
-  docMetaErr.textContent = "";
-  _lastFocused = document.activeElement;
-  lockBackground();
-  docMetaModal.setAttribute("aria-hidden", "false");
-  trapFocus(docMetaModal);
-  const firstInput = docMetaForm.querySelector("textarea, input, select, button");
-  (firstInput || docMetaSave)?.focus();
-}
-function closeDocMetaModal() {
-  docMetaModal.setAttribute("aria-hidden", "true");
-  if (typeof docMetaModal._removeTrap === "function") docMetaModal._removeTrap();
-  unlockBackground();
-  if (_lastFocused) { try { _lastFocused.focus(); } catch {} }
-  _currentMeta = null;
-}
-async function saveDocMeta(fileId, meta) {
-  const rec = await readDoc(fileId);
-  if (!rec) return;
-  const link = findExhibitLocationByFileId(fileId);
-  const affidavitId = localStorage.getItem(LS.AFFIDAVIT_ID) || null;
-  rec.meta = { ...(rec.meta || {}), ...meta };
-  rec.system = { ...(rec.system || {}), attachedTo: "affidavit", affidavitId, paragraphId: link?.paragraphId || null, paragraphNo: link?.paragraphNo ?? null, exhibitId: link?.exhibitId || null };
-  if (rec.pageCount == null && rec.type === "application/pdf" && rec.blob) { rec.pageCount = await computePdfPageCountFromBlob(rec.blob); }
-  await writeDoc(rec);
-}
-function validateDocMetaFromForm() {
-  const schema = loadDocSchema();
-  const out = {}; let noDate = false;
-  for (const field of schema) {
-    const elmt = document.getElementById(`docmeta-${field.key}`); if (!elmt) continue;
-    let v = (elmt.value || "").trim();
-    if (field.type === "date") { const noneCb = document.getElementById(`${elmt.id}-none`); noDate = !!(noneCb && noneCb.checked); if (noDate) v = ""; }
-    if (field.required && !v) return { ok: false, message: `Please provide: ${field.label}.` };
-    out[field.key] = v;
-  }
-  const dateEl = document.getElementById("docmeta-docDate");
-  if (dateEl) {
-    const noneCb = document.getElementById(`${dateEl.id}-none`);
-    const hasDate = !dateEl.disabled && (dateEl.value || "").trim();
-    const noDateChecked = !!(noneCb && noneCb.checked);
-    if (!hasDate && !noDateChecked) return { ok: false, message: 'Please enter a document date or check “This document has no date”.' };
-  }
-  out.noDocDate = noDate;
-  return { ok: true, data: out };
-}
-async function handleDocMetaSave() {
-  if (!_currentMeta) return;
-  const v = validateDocMetaFromForm();
-  if (!v.ok) { docMetaErr.textContent = v.message || "Please complete required fields."; return; }
-  await saveDocMeta(_currentMeta.fileId, v.data);
-  closeDocMetaModal();
-  processNextMetaInQueue();
-}
-function processNextMetaInQueue() {
-  if (_pendingMetaQueue.length === 0) return;
-  const next = _pendingMetaQueue.shift();
-  openDocMetaModal(next);
-}
-
-/* ---------- Row rendering (adds toolbar) ---------- */
-function renderRow(p, totalCount, labels) {
-  const row = el("div", { className: "row" });
-
-  // Left column
-  const left = el("div", { className: "row-num" });
-  const numWrap = el("div", { className: "para-num-row" });
-  const labelAndBadge = el("label", { className: "no-inline", innerHTML: ` Paragraph No. <span class="pill"># ${p.number}</span>` });
-
-  const moveControls = el("div", { className: "move-controls" });
-  const moveLbl = el("label", { htmlFor: `move-${p.id}`, innerText: "Move to Paragraph No.:" });
-  const numControls = el("div", { className: "num-controls" });
-  const num = el("input", { type: "number", id: `move-${p.id}`, className: "num", min: 1, max: totalCount, step: 1, value: p.number });
-  const applyReorder = el("button", { type: "button", className: "applyReorder", innerText: "Apply" });
-  numControls.append(num, applyReorder);
-  moveControls.append(moveLbl, numControls);
-
-  const delBtn = el("button", { type: "button", className: "del", innerText: "Remove paragraph" });
-  const insBelow = el("button", { type: "button", className: "insBelow", innerText: "Insert new paragraph below" });
-
-  numWrap.append(labelAndBadge, moveControls, delBtn, insBelow);
-  left.append(numWrap);
-
-  // Middle column
-  const mid = el("div", { className: "row-text" });
-  const textLbl = el("label", { innerText: "Paragraph text" });
-
-  // RTE toolbar + editor (no dropdown)
-  const toolbar = buildRteToolbar();
-  const editor = renderEditorFromParagraph(p, labels);
-  protectChips(editor);
-
-  // Toolbar wiring
-  toolbar.addEventListener("click", (e) => {
-    const target = e.target;
-    if (!(target instanceof HTMLElement)) return;
-    const cmd = target.dataset?.cmd;
-    if (!cmd) return;
-
-    const ed = getActiveEditor(toolbar);
-    if (!ed) return;
-
-    if (cmd === "insertOrderedList") {
-      execOnEditor(ed, "insertOrderedList");
-    } else if (cmd === "insertUnorderedList") {
-      execOnEditor(ed, "insertUnorderedList");
-    } else {
-      execOnEditor(ed, cmd);
-    }
-
-    persistEditor(p, ed);
-    syncUndoRedoButtons();
-  });
-
-  // Keyboard shortcuts (B/I/U)
-  editor.addEventListener("keydown", (e) => {
-    const isMac = navigator.platform.toUpperCase().includes("MAC");
-    const mod = isMac ? e.metaKey : e.ctrlKey;
-    if (!mod) return;
-    if (["b","i","u"].includes(e.key.toLowerCase())) e.preventDefault();
-    const map = { b: "bold", i: "italic", u: "underline" };
-    const cmd = map[e.key.toLowerCase()];
-    if (cmd) {
-      execOnEditor(editor, cmd);
-      persistEditor(p, editor);
-      syncUndoRedoButtons();
-    }
-  });
-
-  // Exhibit strip
-  const strip = el("div", { className: "exhibit-strip" });
-  const addBtn = el("button", { type: "button", className: "addExhibitsBtn", innerText: "+ Add exhibit(s)" });
-  const fileMulti = el("input", { type: "file", className: "fileMulti", accept: "application/pdf,image/*", multiple: true });
-  fileMulti.hidden = true;
-  strip.append(addBtn, fileMulti);
-
-  function makeClickableSpan(span, onOpen) {
-    span.classList.add("clickable");
-    span.tabIndex = 0;
-    span.addEventListener("click", onOpen);
-    span.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } });
-  }
-
-  function renderExhibitChipsRail() {
-    [...strip.querySelectorAll(".rail-chip")].forEach(n => n.remove());
-    (p.exhibits || []).forEach((ex, idx) => {
-      const lab = labels.get(ex.id) || "";
-      const chip = el("div", { className: "exhibit-chip rail-chip", dataset: { exId: ex.id } });
-
-      const labelSpan = el("span", { className: "pill exhibit-label", innerText: `exhibit "${lab}"`, title: "Edit exhibit details" });
-      const nameSpan  = el("span", { className: "exhibit-name", innerText: `• ${ex.name || "Exhibit"}`, title: "Edit exhibit details" });
-
-      const openEditor = () => { openDocMetaForFile(ex.fileId); };
-      makeClickableSpan(labelSpan, openEditor);
-      makeClickableSpan(nameSpan, openEditor);
-
-      const actions   = el("div", { className: "exhibit-actions" });
-      const leftBtn   = el("button", { type: "button", className: "ex-left",  innerText: "←", title: "Move exhibit left" });
-      const rightBtn  = el("button", { type: "button", className: "ex-right", innerText: "→", title: "Move exhibit right" });
-      const editBtn   = el("button", { type: "button", className: "ex-edit",  innerText: "Edit", title: "Edit description/date/type" });
-
-      if (idx === 0) leftBtn.disabled = true;
-      if (idx === (p.exhibits.length - 1)) rightBtn.disabled = true;
-
-      leftBtn.onclick  = () => { moveExhibit(p.id, ex.id, -1); renderParagraphs(); };
-      rightBtn.onclick = () => { moveExhibit(p.id, ex.id, +1); renderParagraphs(); };
-      editBtn.onclick  = openEditor;
-
-      actions.append(leftBtn, rightBtn, editBtn);
-      chip.append(labelSpan, nameSpan, actions);
-      strip.insertBefore(chip, addBtn);
-    });
-  }
-  renderExhibitChipsRail();
-
-  // Save on input (with sanitization)
-  editor.addEventListener("input", () => {
-    persistEditor(p, editor);
-    syncUndoRedoButtons();
-  });
-
-  // Reorder / delete / insert
-  const desiredNumber = () => {
-    let n = Math.round(Number(num.value));
-    if (!Number.isFinite(n) || n < 1) n = 1;
-    if (n > totalCount) n = totalCount;
-    return n;
-  };
-  const syncApplyState = () => { applyReorder.disabled = (desiredNumber() === p.number); };
-  syncApplyState(); num.addEventListener("input", syncApplyState);
-  applyReorder.onclick = () => { const n = desiredNumber(); if (n !== p.number) { moveToPosition(p.id, n); renderParagraphs(); } };
-  delBtn.onclick = () => { if (confirm("Remove this paragraph?")) { removeParagraph(p.id); renderParagraphs(); } };
-  insBelow.onclick = () => { insertNewBelow(p.number); renderParagraphs(); };
-
-  // Add exhibits (picker)
-  const openPicker = () => fileMulti.click();
-  addBtn.onclick = openPicker;
-
-  fileMulti.onchange = async () => {
-    const files = Array.from(fileMulti.files || []);
-    if (!files.length) return;
-
-    const invalid = files.find(f => !(f.type === "application/pdf" || f.type.startsWith("image/")));
-    if (invalid) { alert("Please attach PDF files or images only."); fileMulti.value = ""; return; }
-
-    try {
-      const entries = [];
-      for (const f of files) {
-        const fileId = await saveFileBlob(f);
-        entries.push({ fileId, name: f.name });
-        _pendingMetaQueue.push({
-          fileId,
-          defaults: {
-            shortDesc: f.name.replace(/\.(pdf|png|jpe?g|gif|webp|tiff?)$/i, ""),
-            docDate: (f.name.match(/\b(20\d{2}|19\d{2})[-_\.]?(0[1-9]|1[0-2])[-_\.]?(0[1-9]|[12]\d|3[01])\b/) || [])[0]?.replace(/[_.]/g, "-") || ""
+function createEditor(mount, p, labels){
+  // Build initial content (from saved html or runs → HTML)
+  const initialHTML = p.html && p.html.trim()
+    ? p.html
+    : (() => {
+        const div=document.createElement("div"); const para=document.createElement("p");
+        (p.runs||[]).forEach(r=>{
+          if(r.type==="text") para.append(document.createTextNode(r.text||""));
+          if(r.type==="exhibit"){
+            const span=document.createElement("span");
+            span.className="exh-chip"; span.setAttribute("data-ex-id", r.exId); span.setAttribute("contenteditable","false");
+            span.textContent=`exhibit "${labels.get(r.exId)||"?"}"`;
+            para.append(document.createTextNode("\u200B"), span, document.createTextNode("\u200B"));
           }
         });
+        if(!para.firstChild) para.append(document.createTextNode(""));
+        div.append(para); return div.innerHTML;
+      })();
+
+  const editor = new Editor({
+    element: mount,
+    extensions: [
+      StarterKit,   // paragraph, text, bold, italic, lists, history, etc.
+      Underline,    // extra mark
+      ExhibitChip,  // our atomic node
+    ],
+    content: initialHTML,
+    editorProps: { attributes: { class: "para-editor", "aria-label":"Paragraph editor" } },
+    onUpdate: ({ editor }) => {
+      const html = editor.getHTML();
+      const runs = runsFromDoc(editor.getJSON());
+      upsertParagraph({ id: p.id, html, runs });
+      syncUndoUI();
+    },
+  });
+
+  EDITORS.set(p.id, editor);
+  return editor;
+}
+
+/* ---------- Add/Move/Remove exhibits (model + live editor) ---------- */
+function addExhibits(pId, entries){
+  histPush();
+  const list=loadParas().sort(byNo);
+  const i=list.findIndex(pp=>pp.id===pId); if(i===-1) return;
+  const p=ensureRuns(list[i]); p.exhibits=p.exhibits||[];
+  const newIds=[];
+  for(const e of entries){
+    const exId=crypto.randomUUID();
+    p.exhibits.push({id:exId, fileId:e.fileId, name:e.name||"Exhibit"});
+    newIds.push(exId);
+  }
+  for(const exId of newIds) p.runs.push({type:"exhibit", exId});
+  saveParas(renumber(list));
+
+  const labels=computeLabels(loadParas());
+  const ed=EDITORS.get(pId);
+  if(ed){
+    for(const exId of newIds) ed.commands.insertExhibitChip({ exId, label: labels.get(exId)||"?" });
+  }
+}
+function moveExhibit(pId, exId, dir){
+  histPush();
+  const list=loadParas().sort(byNo);
+  const i=list.findIndex(pp=>pp.id===pId); if(i===-1) return;
+  const p=ensureRuns(list[i]); const ex=p.exhibits||[]; const idx=ex.findIndex(x=>x.id===exId);
+  if(idx<0) { saveParas(renumber(list)); return; }
+  const j=idx+dir; if(j<0||j>=ex.length){ saveParas(renumber(list)); return; }
+  [ex[idx], ex[j]]=[ex[j], ex[idx]];
+  saveParas(renumber(list));
+
+  // Update chip labels in editor
+  const labels=computeLabels(loadParas());
+  const ed=EDITORS.get(pId);
+  if(ed){
+    const el=document.createElement("div");
+    el.innerHTML=ed.getHTML();
+    el.querySelectorAll(".exh-chip").forEach(n=>{
+      const id=n.getAttribute("data-ex-id");
+      n.textContent=`exhibit "${labels.get(id)||"?"}"`;
+    });
+    ed.commands.setContent(el.innerHTML, false);
+  }
+}
+function removeExhibit(pId, exId) {
+  histPush();
+
+  // 1) Update model
+  const list = loadParas().sort(byNo);
+  const i = list.findIndex(pp => pp.id === pId);
+  if (i === -1) return;
+  const p = ensureRuns(list[i]);
+
+  p.exhibits = (p.exhibits || []).filter(x => x.id !== exId);
+  p.runs     = (p.runs || []).filter(r => !(r.type === "exhibit" && r.exId === exId));
+  saveParas(renumber(list));
+
+  // 2) Remove the chip in the live editor via privileged command (sets meta flag)
+  const ed = EDITORS.get(pId);
+  if (ed) {
+    ed.commands.removeExhibitChip(exId);
+  }
+}
+
+/* ---------- Affidavit linkage ---------- */
+function ensureAffidavitId(){ let id=localStorage.getItem(LS.AFFIDAVIT_ID); if(!id){id=crypto.randomUUID(); localStorage.setItem(LS.AFFIDAVIT_ID,id);} return id; }
+function findExhibitLocationByFileId(fileId){
+  const paras=loadParas().sort(byNo);
+  for(const p of paras){ const hit=(p.exhibits||[]).find(ex=>ex.fileId===fileId); if(hit) return {paragraphId:p.id, paragraphNo:p.number, exhibitId:hit.id}; }
+  return null;
+}
+
+/* ---------- Intake modal ---------- */
+let docMetaModal, docMetaForm, docMetaErr, docMetaSave, docMetaGuidance;
+let _queue=[], _current=null, _lastFocus=null;
+
+function lockBg(){ document.body.dataset._scrollY=String(window.scrollY||0); document.body.style.top=`-${document.body.dataset._scrollY}px`; document.body.style.position="fixed"; document.body.style.width="100%"; }
+function unlockBg(){ const y=Number(document.body.dataset._scrollY||0); document.body.style.position=""; document.body.style.top=""; document.body.style.width=""; window.scrollTo(0,y); }
+function renderGuidance(){ const g=loadDocGuidance(); docMetaGuidance.innerHTML=""; docMetaGuidance.append(elx("h4",{innerText:"Why this matters"}), elx("p",{innerText:g.intro}), elx("p",{innerText:g.note}), elx("h4",{innerText:g.examplesTitle}), (()=>{const u=elx("ul"); (g.examples||[]).forEach(t=>u.append(elx("li",{innerText:t}))); return u;})()); }
+function makeNoDate(forId){ const w=elx("div",{className:"field"}), id=forId+"-none", cb=elx("input",{type:"checkbox",id}); const lab=elx("label",{htmlFor:id,innerText:"This document has no date"}); w.append(cb,lab); return w; }
+async function openDocMetaForFile(fileId){ const rec=await readDoc(fileId); openDocMeta({fileId, defaults:rec?.meta||{}}); }
+function openDocMeta(payload){
+  _current=payload; const schema=loadDocSchema(); renderGuidance(); docMetaForm.innerHTML=""; let dateWrap=null;
+  schema.forEach(f=>{
+    const wrap=elx("div",{className:"field"}); const id=`docmeta-${f.key}`;
+    wrap.append(elx("label",{htmlFor:id,innerText:f.label+(f.required?" *":"")}));
+    let input;
+    if(f.type==="textarea") input=elx("textarea",{id, value:payload.defaults?.[f.key]??""});
+    else if(f.type==="select"){ input=elx("select",{id}); (f.choices||[]).forEach(c=>input.append(elx("option",{value:c,innerText:c}))); const v=payload.defaults?.[f.key]; if(v && !f.choices?.includes(v)) input.append(elx("option",{value:v,innerText:v})); if(v) input.value=v; }
+    else if(f.type==="date") input=elx("input",{id,type:"date", value:payload.defaults?.[f.key]??""});
+    else input=elx("input",{id,type:"text", value:payload.defaults?.[f.key]??""});
+    wrap.append(input); docMetaForm.append(wrap); if(f.type==="date") dateWrap=wrap;
+  });
+  if(dateWrap){
+    const dateIn=dateWrap.querySelector('input[type="date"]'); const none=makeNoDate(dateIn.id); dateWrap.after(none);
+    const cb=none.querySelector('input[type="checkbox"]'); const prev=!!payload.defaults?.noDocDate; cb.checked=prev;
+    const sync=()=>{ if(cb.checked){ dateIn.value=""; dateIn.disabled=true; } else { dateIn.disabled=false; } };
+    sync(); cb.addEventListener("change",sync);
+  }
+  docMetaErr.textContent=""; _lastFocus=document.activeElement; lockBg(); docMetaModal.setAttribute("aria-hidden","false");
+}
+function closeDocMeta(){ docMetaModal.setAttribute("aria-hidden","true"); unlockBg(); if(_lastFocus){try{_lastFocus.focus();}catch{}} _current=null; }
+async function saveDocMeta(fileId, meta){
+  const rec=await readDoc(fileId); if(!rec) return;
+  const link=findExhibitLocationByFileId(fileId); const aff=localStorage.getItem(LS.AFFIDAVIT_ID)||null;
+  rec.meta={...(rec.meta||{}),...meta};
+  rec.system={...(rec.system||{}), attachedTo:"affidavit", affidavitId:aff, paragraphId:link?.paragraphId||null, paragraphNo:link?.paragraphNo??null, exhibitId:link?.exhibitId||null};
+  if(rec.pageCount==null && rec.type==="application/pdf" && rec.blob){ rec.pageCount=await pdfPages(rec.blob); }
+  await writeDoc(rec);
+}
+function validateDocMeta(){
+  const schema=loadDocSchema(); const out={}; let noDate=false;
+  for(const f of schema){
+    const n=document.getElementById(`docmeta-${f.key}`); if(!n) continue;
+    let v=(n.value||"").trim();
+    if(f.type==="date"){ const cb=document.getElementById(`${n.id}-none`); noDate=!!cb?.checked; if(noDate) v=""; }
+    if(f.required && !v) return {ok:false, message:`Please provide: ${f.label}.`};
+    out[f.key]=v;
+  }
+  const dateEl=document.getElementById("docmeta-docDate");
+  if(dateEl){ const cb=document.getElementById(`${dateEl.id}-none`); const has= !dateEl.disabled && (dateEl.value||"").trim(); if(!has && !cb?.checked) return {ok:false, message:'Please enter a document date or check “This document has no date”.'}; }
+  out.noDocDate=noDate; return {ok:true, data:out};
+}
+async function onMetaSave(){
+  if(!_current) return; const v=validateDocMeta(); if(!v.ok){ docMetaErr.textContent=v.message||"Please complete required fields."; return; }
+  await saveDocMeta(_current.fileId, v.data); closeDocMeta(); if(_queue.length){ openDocMeta(_queue.shift()); }
+}
+
+/* ---------- Paragraph row (TipTap-only) ---------- */
+function buildToolbar(p){
+  const tb=elx("div",{className:"rte-toolbar",dataset:{pid:p.id}});
+  const btn=(t,a,title)=>elx("button",{type:"button",innerText:t,title:title||t,dataset:{a}});
+  tb.append(
+    btn("B","bold","Bold"), btn("i","italic","Italic"), btn("U","underline","Underline"),
+    elx("span",{className:"sep"}), btn("•","bullet","Toggle bulleted list"), btn("1.","ordered","Toggle ordered list"),
+    elx("span",{className:"sep"}), btn("→","indent","Indent"), btn("←","outdent","Outdent"),
+    elx("span",{className:"sep"}), btn("Clear","clear","Clear formatting")
+  );
+  tb.addEventListener("click",(e)=>{
+    const a=e.target?.dataset?.a; if(!a) return;
+    const ed=EDITORS.get(p.id); if(!ed) return;
+    const chain=ed.chain().focus();
+    switch(a){
+      case "bold": chain.toggleBold().run(); break;
+      case "italic": chain.toggleItalic().run(); break;
+      case "underline": chain.toggleUnderline().run(); break;
+      case "bullet": chain.toggleBulletList().run(); break;
+      case "ordered": chain.toggleOrderedList().run(); break;
+      case "indent": chain.sinkListItem("listItem").run(); break;
+      case "outdent": chain.liftListItem("listItem").run(); break;
+      case "clear": chain.unsetAllMarks().clearNodes().run(); break;
+    }
+  });
+  return tb;
+}
+
+function renderRow(p,total,labels){
+  const row=elx("div",{className:"row"});
+
+  // Left
+  const left=elx("div",{className:"row-num"});
+  const numWrap=elx("div",{className:"para-num-row"});
+  numWrap.append(
+    elx("label",{className:"no-inline",innerHTML:` Paragraph No. <span class="pill"># ${p.number}</span>`})
+  );
+  const move=elx("div",{className:"move-controls"});
+  move.append(elx("label",{htmlFor:`move-${p.id}`,innerText:"Move to Paragraph No.:"}));
+  const nc=elx("div",{className:"num-controls"});
+  const num=elx("input",{type:"number",id:`move-${p.id}`,className:"num",min:1,max:total,step:1,value:p.number});
+  const apply=elx("button",{type:"button",className:"applyReorder",innerText:"Apply"});
+  nc.append(num,apply); move.append(nc);
+  const del=elx("button",{type:"button",className:"del",innerText:"Remove paragraph"});
+  const ins=elx("button",{type:"button",className:"insBelow",innerText:"Insert new paragraph below"});
+  numWrap.append(move,del,ins); left.append(numWrap);
+
+  // Middle (TipTap mount)
+  const mid=elx("div",{className:"row-text"});
+  mid.append(elx("label",{innerText:"Paragraph text"}));
+  const toolbar=buildToolbar(p); const mount=elx("div");
+  mid.append(toolbar, mount);
+
+  createEditor(mount,p,labels);
+
+  // Exhibit rail
+  const strip=elx("div",{className:"exhibit-strip"});
+  const addBtn=elx("button",{type:"button",className:"addExhibitsBtn",innerText:"+ Add exhibit(s)"});
+  const file=elx("input",{type:"file",className:"fileMulti",accept:"application/pdf,image/*",multiple:true});
+  file.hidden=true; strip.append(addBtn,file); mid.append(strip);
+
+  function renderRail(){
+    [...strip.querySelectorAll(".rail-chip")].forEach(n=>n.remove());
+    (p.exhibits||[]).forEach((ex,idx)=>{
+      const chip=elx("div",{className:"exhibit-chip rail-chip",dataset:{exId:ex.id}});
+      const label=labels.get(ex.id)||""; 
+      const L=elx("span",{className:"pill exhibit-label",innerText:`exhibit "${label}"`,title:"Edit exhibit details"});
+      const N=elx("span",{className:"exhibit-name",innerText:`• ${ex.name||"Exhibit"}`,title:"Edit exhibit details"});
+      const open=()=>openDocMetaForFile(ex.fileId);
+      L.classList.add("clickable"); N.classList.add("clickable");
+      L.tabIndex=0; N.tabIndex=0;
+      L.onclick=open; N.onclick=open;
+      L.onkeydown=ev=>{if(ev.key==="Enter"||ev.key===" ")open();};
+      N.onkeydown=L.onkeydown;
+
+      const actions=elx("div",{className:"exhibit-actions"});
+      const leftBtn=elx("button",{type:"button",className:"ex-left",innerText:"←",title:"Move exhibit left"});
+      const rightBtn=elx("button",{type:"button",className:"ex-right",innerText:"→",title:"Move exhibit right"});
+      const editBtn=elx("button",{type:"button",className:"ex-edit",innerText:"Edit",title:"Edit description/date/type"});
+      if(idx===0) leftBtn.disabled=true; if(idx===(p.exhibits.length-1)) rightBtn.disabled=true;
+      leftBtn.onclick=()=>{moveExhibit(p.id,ex.id,-1); renderParagraphs();};
+      rightBtn.onclick=()=>{moveExhibit(p.id,ex.id,+1); renderParagraphs();};
+      editBtn.onclick=open;
+      actions.append(leftBtn,rightBtn,editBtn);
+
+      chip.append(L,N,actions); strip.insertBefore(chip,addBtn);
+    });
+  }
+  renderRail();
+
+  // Handlers
+  const want=()=>{let n=Math.round(Number(num.value)); if(!Number.isFinite(n)||n<1) n=1; if(n>total) n=total; return n; };
+  const sync=()=>{ apply.disabled=(want()===p.number); };
+  sync(); num.addEventListener("input",sync);
+  apply.onclick=()=>{ const n=want(); if(n!==p.number){ moveToPos(p.id,n); renderParagraphs(); } };
+  del.onclick=()=>{ if(confirm("Remove this paragraph?")){ removeParagraph(p.id); renderParagraphs(); } };
+  ins.onclick=()=>{ histPush(); const list=loadParas().sort(byNo); const q=newPara(); const idx=p.number; list.splice(idx,0,q); saveParas(renumber(list)); renderParagraphs(); };
+
+  // Add exhibits
+  addBtn.onclick=()=>file.click();
+  file.onchange=async ()=>{
+    const files=Array.from(file.files||[]); if(!files.length) return;
+    const bad=files.find(f=>!(f.type==="application/pdf"||f.type.startsWith("image/")));
+    if(bad){ alert("Please attach PDF files or images only."); file.value=""; return; }
+    try{
+      const entries=[];
+      for(const f of files){
+        const fileId=await saveFileBlob(f);
+        entries.push({fileId,name:f.name});
+        _queue.push({fileId, defaults:{ shortDesc:f.name.replace(/\.(pdf|png|jpe?g|gif|webp|tiff?)$/i,""), docDate:(f.name.match(/\b(20\d{2}|19\d{2})[-_\.]?(0[1-9]|1[0-2])[-_\.]?(0[1-9]|[12]\d|3[01])\b/)||[])[0]?.replace(/[_.]/g,"-")||"" }});
       }
       addExhibits(p.id, entries);
       renderParagraphs();
-
-      if (docMetaModal?.getAttribute("aria-hidden") !== "false") processNextMetaInQueue();
-    } catch (e) {
-      console.error("Exhibit save failed:", e);
-      alert("Could not save one of the selected files. Please try again.");
-    }
-    fileMulti.value = "";
+      if(docMetaModal?.getAttribute("aria-hidden")!=="false" && _queue.length) openDocMeta(_queue.shift());
+    }catch(e){ console.error("Exhibit save failed:",e); alert("Could not save one of the selected files. Please try again."); }
+    file.value="";
   };
 
-  mid.append(textLbl, toolbar, editor, strip);
-
-  // Right column (spacer)
-  const right = el("div", { className: "row-file" });
+  // Right spacer
+  const right=elx("div",{className:"row-file"});
   row.append(left, mid, right);
   return row;
 }
 
-/* ---------- Paragraph list UI ---------- */
-function renderParagraphs() {
-  const container = document.querySelector("#paraList");
-  if (!container) return;
+/* ---------- List rendering ---------- */
+function renderParagraphs(){
+  const container=$("#paraList"); if(!container) return;
 
-  const list = loadParas().sort(byNumber).map(ensureRuns);
-  const labels = computeExhibitLabels(list);
+  // Destroy old editors
+  for (const [pid,ed] of EDITORS){ try{ed.destroy();}catch{} }
+  EDITORS.clear();
 
-  container.innerHTML = "";
-  list.forEach(p => container.appendChild(renderRow(p, list.length, labels)));
+  const list=loadParas().sort(byNo).map(ensureRuns);
+  const labels=computeLabels(list);
+
+  container.innerHTML="";
+  list.forEach(p=> container.appendChild(renderRow(p, list.length, labels)));
 }
 
 /* ---------- Init ---------- */
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", async ()=>{
   ensureAffidavitId();
 
-  const backBtn = $("#back"); if (backBtn) backBtn.onclick = () => history.back();
+  const back=$("#back"); if(back) back.onclick=()=>history.back();
 
-  // Exhibit label toggle
-  const toggle = document.getElementById("schemeToggle");
-  const textEl = document.getElementById("schemeText");
-  if (toggle) {
-    const current = getExhibitScheme();
-    toggle.checked = (current === "numbers");
-    if (textEl) textEl.textContent = toggle.checked ? "Numbers" : "Letters";
-    toggle.addEventListener("change", () => {
-      const newScheme = toggle.checked ? "numbers" : "letters";
-      setExhibitScheme(newScheme);
-      if (textEl) textEl.textContent = toggle.checked ? "Numbers" : "Letters";
-      renderParagraphs();
-    });
+  // Label scheme toggle
+  const toggle=$("#schemeToggle"), textEl=$("#schemeText");
+  if(toggle){
+    const cur=getExhibitScheme(); toggle.checked=(cur==="numbers"); if(textEl) textEl.textContent=toggle.checked?"Numbers":"Letters";
+    toggle.addEventListener("change",()=>{ const s=toggle.checked?"numbers":"letters"; setExhibitScheme(s); if(textEl) textEl.textContent=toggle.checked?"Numbers":"Letters"; renderParagraphs(); });
   }
 
-  const undoBtn = $("#undoBtn"), redoBtn = $("#redoBtn");
-  if (undoBtn) undoBtn.onclick = () => undo();
-  if (redoBtn) redoBtn.onclick = () => redo();
+  const ub=$("#undoBtn"), rb=$("#redoBtn"); if(ub) ub.onclick=undo; if(rb) rb.onclick=redo;
 
-  // Modal refs
-  docMetaModal    = $("#docMetaModal");
-  docMetaForm     = $("#docMetaForm");
-  docMetaErr      = $("#docMetaErrors");
-  docMetaSave     = $("#docMetaSave");
-  docMetaGuidance = $("#docMetaGuidance");
+  // Modal wires
+  docMetaModal=$("#docMetaModal"); docMetaForm=$("#docMetaForm"); docMetaErr=$("#docMetaErrors"); docMetaSave=$("#docMetaSave"); docMetaGuidance=$("#docMetaGuidance");
+  if(docMetaModal){ docMetaModal.addEventListener("click",(e)=>{ if(e.target===docMetaModal){ e.preventDefault(); docMetaErr.textContent="Please complete the fields and click Save to continue."; } }); }
+  if(docMetaSave) docMetaSave.onclick=onMetaSave;
 
-  if (docMetaModal) {
-    docMetaModal.addEventListener("click", (e) => {
-      if (e.target === docMetaModal) {
-        e.stopPropagation();
-        e.preventDefault();
-        docMetaErr.textContent = "Please complete the fields and click Save to continue.";
-      }
-    });
-  }
-  if (docMetaSave) docMetaSave.onclick = handleDocMetaSave;
-
-  await migrateParasIfNeeded();
+  await migrate();
   renderHeading();
   renderIntro();
-  if (loadParas().length === 0) addParagraph();
+
+  if(loadParas().length===0) addPara();
   renderParagraphs();
 
-  const addBtn = $("#addParaEnd");
-  if (addBtn) addBtn.onclick = () => { addParagraph(); renderParagraphs(); };
+  const addEnd=$("#addParaEnd"); if(addEnd) addEnd.onclick=()=>{ addPara(); renderParagraphs(); };
 
-  if (UNDO_STACK.length === 0) UNDO_STACK.push(snapshotParas());
-  syncUndoRedoButtons();
+  if(UNDO.length===0) UNDO.push(snap());
+  syncUndoUI();
 });

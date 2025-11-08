@@ -104,55 +104,72 @@
             </label>
 
             <div class="lawyer-fields mt-12" hidden>
-              <div class="name-row">
-                <div class="cell">
-                  <label>Firm Name:</label>
-                  <input type="text" class="pl-law-firm" placeholder="e.g. Law Firm LLP">
-                </div>
-                <div class="cell">
-                  <label>Lawyer Name:</label>
-                  <input type="text" class="pl-law-first" placeholder="First">
-                  <input type="text" class="pl-law-last" placeholder="Last" style="margin-left:8px;">
-                </div>
-              </div>
-              <div class="name-row">
-                <div class="cell">
-                  <label>Address 1:</label>
-                  <input type="text" class="pl-law-addr1" placeholder="Street address">
-                </div>
-                <div class="cell">
-                  <label>Address 2:</label>
-                  <input type="text" class="pl-law-addr2" placeholder="Unit, Suite (optional)">
+              <!-- Reuse UI -->
+              <div class="reuse-lawyer">
+                <label>
+                  <input type="checkbox" class="pl-use-existing-lawyer">
+                  Use lawyer already provided
+                </label>
+                <div class="existing-lawyer-select" hidden>
+                  <label>Choose lawyer:</label>
+                  <select class="pl-lawyer-select">
+                    <option value="">— select —</option>
+                  </select>
                 </div>
               </div>
-              <div class="name-row">
-                <div class="cell">
-                  <label>City:</label>
-                  <input type="text" class="pl-law-city" placeholder="e.g. Toronto">
+
+              <!-- Manual UI (wrapped for easy hide/show) -->
+              <div class="manual-lawyer-fields">
+                <div class="name-row">
+                  <div class="cell">
+                    <label>Firm Name:</label>
+                    <input type="text" class="pl-law-firm" placeholder="e.g. Law Firm LLP">
+                  </div>
+                  <div class="cell">
+                    <label>Lawyer Name:</label>
+                    <input type="text" class="pl-law-first" placeholder="First">
+                    <input type="text" class="pl-law-last" placeholder="Last" style="margin-left:8px;">
+                  </div>
                 </div>
-                <div class="cell">
-                  <label>Province:</label>
-                  <input type="text" class="pl-law-prov" placeholder="e.g. Ontario">
+                <div class="name-row">
+                  <div class="cell">
+                    <label>Address 1:</label>
+                    <input type="text" class="pl-law-addr1" placeholder="Street address">
+                  </div>
+                  <div class="cell">
+                    <label>Address 2:</label>
+                    <input type="text" class="pl-law-addr2" placeholder="Unit, Suite (optional)">
+                  </div>
                 </div>
-              </div>
-              <div class="name-row">
-                <div class="cell">
-                  <label>Postal Code:</label>
-                  <input type="text" class="pl-law-postal" placeholder="e.g. M5J 2N1">
+                <div class="name-row">
+                  <div class="cell">
+                    <label>City:</label>
+                    <input type="text" class="pl-law-city" placeholder="e.g. Toronto">
+                  </div>
+                  <div class="cell">
+                    <label>Province:</label>
+                    <input type="text" class="pl-law-prov" placeholder="e.g. Ontario">
+                  </div>
                 </div>
-                <div class="cell">
-                  <label>Phone:</label>
-                  <input type="text" class="pl-law-phone" placeholder="e.g. 416-555-1234">
+                <div class="name-row">
+                  <div class="cell">
+                    <label>Postal Code:</label>
+                    <input type="text" class="pl-law-postal" placeholder="e.g. M5J 2N1">
+                  </div>
+                  <div class="cell">
+                    <label>Phone:</label>
+                    <input type="text" class="pl-law-phone" placeholder="e.g. 416-555-1234">
+                  </div>
                 </div>
-              </div>
-              <div class="name-row">
-                <div class="cell">
-                  <label>Email:</label>
-                  <input type="email" class="pl-law-email" placeholder="lawyer@example.com">
-                </div>
-                <div class="cell">
-                  <label>Lawyer Licence #:</label>
-                  <input type="text" class="pl-law-license" placeholder="e.g. LSO 12345">
+                <div class="name-row">
+                  <div class="cell">
+                    <label>Email:</label>
+                    <input type="email" class="pl-law-email" placeholder="lawyer@example.com">
+                  </div>
+                  <div class="cell">
+                    <label>Lawyer Licence #:</label>
+                    <input type="text" class="pl-law-license" placeholder="e.g. LSO 12345">
+                  </div>
                 </div>
               </div>
             </div>
@@ -230,55 +247,70 @@
               </label>
 
               <div class="lawyer-fields mt-12" hidden>
-                <div class="name-row">
-                  <div class="cell">
-                    <label>Firm Name:</label>
-                    <input type="text" class="pl-law-firm" placeholder="Firm">
-                  </div>
-                  <div class="cell">
-                    <label>Lawyer Name:</label>
-                    <input type="text" class="pl-law-first" placeholder="First">
-                    <input type="text" class="pl-law-last" placeholder="Last" style="margin-left:8px;">
-                  </div>
-                </div>
-                <div class="name-row">
-                  <div class="cell">
-                    <label>Address 1:</label>
-                    <input type="text" class="pl-law-addr1" placeholder="Street address">
-                  </div>
-                  <div class="cell">
-                    <label>Address 2:</label>
-                    <input type="text" class="pl-law-addr2" placeholder="Unit, Suite (optional)">
+                <div class="reuse-lawyer">
+                  <label>
+                    <input type="checkbox" class="pl-use-existing-lawyer">
+                    Use lawyer already provided
+                  </label>
+                  <div class="existing-lawyer-select" hidden>
+                    <label>Choose lawyer:</label>
+                    <select class="pl-lawyer-select">
+                      <option value="">— select —</option>
+                    </select>
                   </div>
                 </div>
-                <div class="name-row">
-                  <div class="cell">
-                    <label>City:</label>
-                    <input type="text" class="pl-law-city" placeholder="City">
+
+                <div class="manual-lawyer-fields">
+                  <div class="name-row">
+                    <div class="cell">
+                      <label>Firm Name:</label>
+                      <input type="text" class="pl-law-firm" placeholder="Firm">
+                    </div>
+                    <div class="cell">
+                      <label>Lawyer Name:</label>
+                      <input type="text" class="pl-law-first" placeholder="First">
+                      <input type="text" class="pl-law-last" placeholder="Last" style="margin-left:8px;">
+                    </div>
                   </div>
-                  <div class="cell">
-                    <label>Province:</label>
-                    <input type="text" class="pl-law-prov" placeholder="Province">
+                  <div class="name-row">
+                    <div class="cell">
+                      <label>Address 1:</label>
+                      <input type="text" class="pl-law-addr1" placeholder="Street address">
+                    </div>
+                    <div class="cell">
+                      <label>Address 2:</label>
+                      <input type="text" class="pl-law-addr2" placeholder="Unit, Suite (optional)">
+                    </div>
                   </div>
-                </div>
-                <div class="name-row">
-                  <div class="cell">
-                    <label>Postal Code:</label>
-                    <input type="text" class="pl-law-postal" placeholder="Postal code">
+                  <div class="name-row">
+                    <div class="cell">
+                      <label>City:</label>
+                      <input type="text" class="pl-law-city" placeholder="City">
+                    </div>
+                    <div class="cell">
+                      <label>Province:</label>
+                      <input type="text" class="pl-law-prov" placeholder="Province">
+                    </div>
                   </div>
-                  <div class="cell">
-                    <label>Phone:</label>
-                    <input type="text" class="pl-law-phone" placeholder="Phone">
+                  <div class="name-row">
+                    <div class="cell">
+                      <label>Postal Code:</label>
+                      <input type="text" class="pl-law-postal" placeholder="Postal code">
+                    </div>
+                    <div class="cell">
+                      <label>Phone:</label>
+                      <input type="text" class="pl-law-phone" placeholder="Phone">
+                    </div>
                   </div>
-                </div>
-                <div class="name-row">
-                  <div class="cell">
-                    <label>Email:</label>
-                    <input type="email" class="pl-law-email" placeholder="Email">
-                  </div>
-                  <div class="cell">
-                    <label>Lawyer Licence #:</label>
-                    <input type="text" class="pl-law-license" placeholder="e.g. LSO 12345">
+                  <div class="name-row">
+                    <div class="cell">
+                      <label>Email:</label>
+                      <input type="email" class="pl-law-email" placeholder="Email">
+                    </div>
+                    <div class="cell">
+                      <label>Lawyer Licence #:</label>
+                      <input type="text" class="pl-law-license" placeholder="e.g. LSO 12345">
+                    </div>
                   </div>
                 </div>
               </div>
@@ -364,55 +396,70 @@
             </label>
 
             <div class="lawyer-fields mt-12" hidden>
-              <div class="name-row">
-                <div class="cell">
-                  <label>Firm Name:</label>
-                  <input type="text" class="df-law-firm" placeholder="Firm">
-                </div>
-                <div class="cell">
-                  <label>Lawyer Name:</label>
-                  <input type="text" class="df-law-first" placeholder="First">
-                  <input type="text" class="df-law-last" placeholder="Last" style="margin-left:8px;">
-                </div>
-              </div>
-              <div class="name-row">
-                <div class="cell">
-                  <label>Address 1:</label>
-                  <input type="text" class="df-law-addr1" placeholder="Street address">
-                </div>
-                <div class="cell">
-                  <label>Address 2:</label>
-                  <input type="text" class="df-law-addr2" placeholder="Unit, Suite (optional)">
+              <div class="reuse-lawyer">
+                <label>
+                  <input type="checkbox" class="df-use-existing-lawyer">
+                  Use lawyer already provided
+                </label>
+                <div class="existing-lawyer-select" hidden>
+                  <label>Choose lawyer:</label>
+                  <select class="df-lawyer-select">
+                    <option value="">— select —</option>
+                  </select>
                 </div>
               </div>
-              <div class="name-row">
-                <div class="cell">
-                  <label>City:</label>
-                  <input type="text" class="df-law-city" placeholder="City">
+
+              <div class="manual-lawyer-fields">
+                <div class="name-row">
+                  <div class="cell">
+                    <label>Firm Name:</label>
+                    <input type="text" class="df-law-firm" placeholder="Firm">
+                  </div>
+                  <div class="cell">
+                    <label>Lawyer Name:</label>
+                    <input type="text" class="df-law-first" placeholder="First">
+                    <input type="text" class="df-law-last" placeholder="Last" style="margin-left:8px;">
+                  </div>
                 </div>
-                <div class="cell">
-                  <label>Province:</label>
-                  <input type="text" class="df-law-prov" placeholder="Province">
+                <div class="name-row">
+                  <div class="cell">
+                    <label>Address 1:</label>
+                    <input type="text" class="df-law-addr1" placeholder="Street address">
+                  </div>
+                  <div class="cell">
+                    <label>Address 2:</label>
+                    <input type="text" class="df-law-addr2" placeholder="Unit, Suite (optional)">
+                  </div>
                 </div>
-              </div>
-              <div class="name-row">
-                <div class="cell">
-                  <label>Postal Code:</label>
-                  <input type="text" class="df-law-postal" placeholder="Postal code">
+                <div class="name-row">
+                  <div class="cell">
+                    <label>City:</label>
+                    <input type="text" class="df-law-city" placeholder="City">
+                  </div>
+                  <div class="cell">
+                    <label>Province:</label>
+                    <input type="text" class="df-law-prov" placeholder="Province">
+                  </div>
                 </div>
-                <div class="cell">
-                  <label>Phone:</label>
-                  <input type="text" class="df-law-phone" placeholder="Phone">
+                <div class="name-row">
+                  <div class="cell">
+                    <label>Postal Code:</label>
+                    <input type="text" class="df-law-postal" placeholder="Postal code">
+                  </div>
+                  <div class="cell">
+                    <label>Phone:</label>
+                    <input type="text" class="df-law-phone" placeholder="Phone">
+                  </div>
                 </div>
-              </div>
-              <div class="name-row">
-                <div class="cell">
-                  <label>Email:</label>
-                  <input type="email" class="df-law-email" placeholder="Email">
-                </div>
-                <div class="cell">
-                  <label>Lawyer Licence #:</label>
-                  <input type="text" class="df-law-license" placeholder="e.g. LSO 12345">
+                <div class="name-row">
+                  <div class="cell">
+                    <label>Email:</label>
+                    <input type="email" class="df-law-email" placeholder="Email">
+                  </div>
+                  <div class="cell">
+                    <label>Lawyer Licence #:</label>
+                    <input type="text" class="df-law-license" placeholder="e.g. LSO 12345">
+                  </div>
                 </div>
               </div>
             </div>
@@ -490,55 +537,70 @@
               </label>
 
               <div class="lawyer-fields mt-12" hidden>
-                <div class="name-row">
-                  <div class="cell">
-                    <label>Firm Name:</label>
-                    <input type="text" class="df-law-firm" placeholder="Firm">
-                  </div>
-                  <div class="cell">
-                    <label>Lawyer Name:</label>
-                    <input type="text" class="df-law-first" placeholder="First">
-                    <input type="text" class="df-law-last" placeholder="Last" style="margin-left:8px;">
-                  </div>
-                </div>
-                <div class="name-row">
-                  <div class="cell">
-                    <label>Address 1:</label>
-                    <input type="text" class="df-law-addr1" placeholder="Street address">
-                  </div>
-                  <div class="cell">
-                    <label>Address 2:</label>
-                    <input type="text" class="df-law-addr2" placeholder="Unit, Suite (optional)">
+                <div class="reuse-lawyer">
+                  <label>
+                    <input type="checkbox" class="df-use-existing-lawyer">
+                    Use lawyer already provided
+                  </label>
+                  <div class="existing-lawyer-select" hidden>
+                    <label>Choose lawyer:</label>
+                    <select class="df-lawyer-select">
+                      <option value="">— select —</option>
+                    </select>
                   </div>
                 </div>
-                <div class="name-row">
-                  <div class="cell">
-                    <label>City:</label>
-                    <input type="text" class="df-law-city" placeholder="City">
+
+                <div class="manual-lawyer-fields">
+                  <div class="name-row">
+                    <div class="cell">
+                      <label>Firm Name:</label>
+                      <input type="text" class="df-law-firm" placeholder="Firm">
+                    </div>
+                    <div class="cell">
+                      <label>Lawyer Name:</label>
+                      <input type="text" class="df-law-first" placeholder="First">
+                      <input type="text" class="df-law-last" placeholder="Last" style="margin-left:8px;">
+                    </div>
                   </div>
-                  <div class="cell">
-                    <label>Province:</label>
-                    <input type="text" class="df-law-prov" placeholder="Province">
+                  <div class="name-row">
+                    <div class="cell">
+                      <label>Address 1:</label>
+                      <input type="text" class="df-law-addr1" placeholder="Street address">
+                    </div>
+                    <div class="cell">
+                      <label>Address 2:</label>
+                      <input type="text" class="df-law-addr2" placeholder="Unit, Suite (optional)">
+                    </div>
                   </div>
-                </div>
-                <div class="name-row">
-                  <div class="cell">
-                    <label>Postal Code:</label>
-                    <input type="text" class="df-law-postal" placeholder="Postal code">
+                  <div class="name-row">
+                    <div class="cell">
+                      <label>City:</label>
+                      <input type="text" class="df-law-city" placeholder="City">
+                    </div>
+                    <div class="cell">
+                      <label>Province:</label>
+                      <input type="text" class="df-law-prov" placeholder="Province">
+                    </div>
                   </div>
-                  <div class="cell">
-                    <label>Phone:</label>
-                    <input type="text" class="df-law-phone" placeholder="Phone">
+                  <div class="name-row">
+                    <div class="cell">
+                      <label>Postal Code:</label>
+                      <input type="text" class="df-law-postal" placeholder="Postal code">
+                    </div>
+                    <div class="cell">
+                      <label>Phone:</label>
+                      <input type="text" class="df-law-phone" placeholder="Phone">
+                    </div>
                   </div>
-                </div>
-                <div class="name-row">
-                  <div class="cell">
-                    <label>Email:</label>
-                    <input type="email" class="df-law-email" placeholder="Email">
-                  </div>
-                  <div class="cell">
-                    <label>Lawyer Licence #:</label>
-                    <input type="text" class="df-law-license" placeholder="e.g. LSO 12345">
+                  <div class="name-row">
+                    <div class="cell">
+                      <label>Email:</label>
+                      <input type="email" class="df-law-email" placeholder="Email">
+                    </div>
+                    <div class="cell">
+                      <label>Lawyer Licence #:</label>
+                      <input type="text" class="df-law-license" placeholder="e.g. LSO 12345">
+                    </div>
                   </div>
                 </div>
               </div>

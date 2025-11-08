@@ -4,7 +4,11 @@
 import { Editor, Node, Extension } from "https://esm.sh/@tiptap/core@2";
 import StarterKit from "https://esm.sh/@tiptap/starter-kit@2";
 import Underline from "https://esm.sh/@tiptap/extension-underline@2";
-import { Plugin } from "https://esm.sh/@tiptap/pm@2/state";
+import OrderedList from "https://esm.sh/@tiptap/extension-ordered-list@2";
+import BulletList from "https://esm.sh/@tiptap/extension-bullet-list@2";
+import ListItem from "https://esm.sh/@tiptap/extension-list-item@2";
+import ListKeymap from "https://esm.sh/@tiptap/extension-list-keymap@2";
+import { Plugin, PluginKey } from "https://esm.sh/@tiptap/pm@2/state";
 
 import { LS, loadJSON, saveJSON, loadDocSchema, loadDocGuidance } from "./constants.js";
 
@@ -146,7 +150,7 @@ function renderIntro(){
   intro.innerHTML=`<h2>Affidavit of ${full||""}</h2><p class="mt-12">${parts.join(", ")}, ${oathText}</p>`;
 }
 
-/* --- TipTap ExhibitChip: inline atomic node with hard delete guard --- */
+/* --- TipTap ExhibitChip: inline atomic node with hard delete guard + commands --- */
 const ExhibitChip = Node.create({
   name: "exhibitChip",
   group: "inline",
@@ -157,10 +161,7 @@ const ExhibitChip = Node.create({
   isolating: true,
 
   addAttributes() {
-    return {
-      exId:  { default: "" },
-      label: { default: "?" },
-    };
+    return { exId: { default: "" }, label: { default: "?" } };
   },
 
   parseHTML() {
@@ -175,73 +176,30 @@ const ExhibitChip = Node.create({
 
   renderHTML({ HTMLAttributes }) {
     const { exId, label } = HTMLAttributes;
-    return ["span",
-      { class: "exh-chip", "data-ex-id": exId, contenteditable: "false" },
-      `exhibit "${label}"`
-    ];
+    return ["span", { class: "exh-chip", "data-ex-id": exId, contenteditable: "false" }, `exhibit "${label}"`];
   },
 
   addCommands() {
     return {
       insertExhibitChip:
-        (attrs) =>
-        ({ chain }) => {
-          const { exId, label } = attrs || {};
-          if (!exId) return false;
-          return chain()
-            .insertContent([
-              { type: "text", text: "\u200B" },           // left cushion (invisible)
-              { type: this.name, attrs: { exId, label } },// the atom
-              { type: "text", text: "\u200B" },           // right cushion (invisible)
-            ])
-            .run();
-        },
-
+        attrs => ({ chain }) => chain().insertContent({ type: this.name, attrs }).run(),
       removeExhibitChip:
-        (exId) =>
-        ({ state, dispatch, tr }) => {
-          if (!exId) return false;
-          let fromPos = null, toPos = null;
+        exId => ({ editor }) => {
+          const { state, view } = editor;
+          const { tr } = state;
           state.doc.descendants((node, pos) => {
-            if (node.type.name === "exhibitChip" && node.attrs.exId === exId) {
-              fromPos = pos;
-              toPos = pos + node.nodeSize;
-              return false;
+            if (node.type.name === this.name && node.attrs.exId === exId) {
+              tr.delete(pos, pos + node.nodeSize);
             }
           });
-          if (fromPos == null) return false;
-          const tx = tr.setMeta("allowChipRemoval", true).delete(fromPos, toPos);
-          if (dispatch) dispatch(tx);
+          view.dispatch(tr.setMeta("allowChipRemoval", true));
           return true;
         },
     };
   },
 
-  addKeyboardShortcuts() {
-    return {
-      Backspace: ({ editor }) => {
-        const { $from } = editor.state.selection;
-        const atStart = $from.parentOffset === 0;
-        if (!editor.isActive("listItem") || !atStart) return false;
-
-        const first = $from.parent.firstChild;
-        const looksChipLead =
-          (first && first.type.name === "text" && first.text === "\u200B" &&
-            first.nextSibling && first.nextSibling.type.name === "exhibitChip") ||
-          (first && first.type.name === "exhibitChip");
-
-        return looksChipLead ? editor.commands.liftListItem("listItem") : false;
-      },
-    };
-  },
-
   addProseMirrorPlugins() {
-    const countChips = (doc) => {
-      let n = 0;
-      doc.descendants(node => { if (node.type?.name === "exhibitChip") n++; });
-      return n;
-    };
-
+    const countChips = (doc) => { let n = 0; doc.descendants(node => { if (node.type?.name === this.name) n++; }); return n; };
     return [
       new Plugin({
         filterTransaction: (tr, state) => {
@@ -249,57 +207,85 @@ const ExhibitChip = Node.create({
           if (!tr.docChanged) return true;
           const before = countChips(state.doc);
           const after  = countChips(tr.doc);
-          return after >= before;
+          return after >= before; // block deletions of chips
         },
       }),
     ];
   },
 });
 
-/* --- ListExitFix: exit list cleanly with one Backspace on empty item --- */
-const ListExitFix = Extension.create({
-  name: "listExitFix",
+/* --- SmartListExit:/* --- SmartListExit v3: Backspace/Delete exit list like Enter (ZWSP + chips aware) --- */
+const SMART_KEY = new PluginKey("smartListExit");
+
+const SmartListExit = Extension.create({
+  name: "smartListExit",
+  priority: 'highest',
+
   addKeyboardShortcuts() {
-    return {
-      Backspace: ({ editor }) => {
-        const { $from } = editor.state.selection;
-        if (!editor.isActive("listItem") || $from.parentOffset !== 0) return false;
+    const stripZ = (s) => (s || "").replace(/\u200B/g, "").trim();
 
-        // Treat ZWSP-only as empty
-        const text = ($from.parent?.textContent || "").replace(/\u200B/g, "");
-        if (text.length > 0) return false;
-
-        let changed = false;
-        while (editor.isActive("listItem")) {
-          const ok = editor.commands.liftListItem("listItem");
-          if (!ok) break;
-          changed = true;
-        }
-        // In case we're still nested in list wrappers
-        if (editor.isActive("bulletList") || editor.isActive("orderedList")) {
-          editor.commands.liftListItem("listItem");
-          changed = true;
-        }
-        return changed;
-      },
+    const paraAtSel = (state) => {
+      const parent = state.selection.$from.parent;
+      return parent?.type?.name === 'paragraph' ? parent : null;
     };
-  },
-});
 
-/* --- ParagraphJoinFix: second Backspace at start of empty paragraph joins up --- */
-const ParagraphJoinFix = Extension.create({
-  name: "paragraphJoinFix",
-  addKeyboardShortcuts() {
+    const paraIsEffectivelyEmpty = (para) => {
+      if (!para) return false;
+      if (para.childCount === 0) return true;
+      let hasReal = false;
+      para.forEach(ch => {
+        if (ch.isText) {
+          if (stripZ(ch.text).length) hasReal = true;
+        } else if (ch.type?.name === 'exhibitChip') {
+          // neutral — chips don't make the item "non-empty"
+        } else {
+          // any other inline node counts as content
+          hasReal = true;
+        }
+      });
+      return !hasReal;
+    };
+
+    const inAnyList = (editor) => (
+      editor.isActive('listItem') || editor.isActive('orderedList') || editor.isActive('bulletList')
+    );
+
+    // Exit list even if caret is not strictly at column 0, as long as the item is effectively empty
+    const exitEmptyListItem = (editor) => {
+      const { state } = editor;
+      if (!inAnyList(editor)) return false;
+      const para = paraAtSel(state);
+      if (!paraIsEffectivelyEmpty(para)) return false;
+
+      let changed = false;
+      while (editor.isActive('listItem')) {
+        const ok = editor.commands.liftListItem('listItem');
+        if (!ok) break;
+        changed = true;
+      }
+      let guard = 16;
+      while (guard-- > 0 && (editor.isActive('orderedList') || editor.isActive('bulletList') || editor.isActive('listItem'))) {
+        if (!editor.can().lift()) break;
+        if (!editor.commands.lift()) break;
+        changed = true;
+      }
+
+      if (changed) {
+        // Force plain paragraph on the same line; do NOT join with previous block
+        editor.chain().focus().setParagraph().run();
+        return true;
+      }
+      return false;
+    };
+
     return {
       Backspace: ({ editor }) => {
-        const { $from } = editor.state.selection;
-        if ($from.parentOffset !== 0) return false;
-        // Only handle plain paragraphs (not list items)
-        if (!($from.parent?.type?.name === "paragraph")) return false;
-        const text = ($from.parent?.textContent || "").replace(/\u200B/g, "");
-        if (text.length > 0) return false;
-        // Join with previous node (moves caret to end of previous line)
-        return editor.commands.joinBackward();
+        if (exitEmptyListItem(editor)) return true; // behave like Word/Docs Enter→Backspace
+        return false;
+      },
+      Delete: ({ editor }) => {
+        if (exitEmptyListItem(editor)) return true; // forward delete should also exit
+        return false;
       },
     };
   },
@@ -342,11 +328,14 @@ function createEditor(mount, p, labels){
   const editor = new Editor({
     element: mount,
     extensions: [
+      // Our list-exit logic must win
+      SmartListExit,
+      // Explicit list schema + keymap per TipTap docs
+      OrderedList, BulletList, ListItem, ListKeymap,
+      // Base kit
       StarterKit,
       Underline,
       ExhibitChip,
-      ListExitFix,     // 1st backspace exits empty list item
-      ParagraphJoinFix // 2nd backspace (empty paragraph) joins with previous
     ],
     content: initialHTML,
     editorProps: { attributes: { class: "para-editor", "aria-label":"Paragraph editor" } },
@@ -379,9 +368,7 @@ function addExhibits(pId, entries){
 
   const labels=computeLabels(loadParas());
   const ed=EDITORS.get(pId);
-  if(ed){
-    for(const exId of newIds) ed.commands.insertExhibitChip({ exId, label: labels.get(exId)||"?" });
-  }
+  if(ed){ for(const exId of newIds) ed.commands.insertExhibitChip({ exId, label: labels.get(exId)||"?" }); }
 }
 function moveExhibit(pId, exId, dir){
   histPush();
@@ -407,16 +394,13 @@ function moveExhibit(pId, exId, dir){
 }
 function removeExhibit(pId, exId) {
   histPush();
-
   const list = loadParas().sort(byNo);
   const i = list.findIndex(pp => pp.id === pId);
   if (i === -1) return;
   const p = ensureRuns(list[i]);
-
   p.exhibits = (p.exhibits || []).filter(x => x.id !== exId);
   p.runs     = (p.runs || []).filter(r => !(r.type === "exhibit" && r.exId === exId));
   saveParas(renumber(list));
-
   const ed = EDITORS.get(pId);
   if (ed) ed.commands.removeExhibitChip(exId);
 }

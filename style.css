@@ -353,3 +353,20 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
   .jurat h2{ margin-bottom:6pt; }
   .jurat .sig-grid{ gap:18px; }
 }
+
+
+
+
+/* ===== Affidavit intro title ===== */
+#intro h2 {
+  text-align: center;
+  text-transform: uppercase; /* renders "AFFIDAVIT OF ROBIN YATES" */
+  font-family: "Times New Roman", Times, serif;
+  font-weight: 700;
+  margin: 4px 0 8px;
+  letter-spacing: 0.5px;
+}
+
+#intro p {
+  text-align: left; /* keep the body text left-aligned */
+}

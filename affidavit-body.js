@@ -173,7 +173,7 @@ function renderIntro(){
     default: cap=d.role?`the ${d.role}`:"";
   }
   const oathText = oath==="swear" ? "MAKE OATH AND SAY:" : "AFFIRM:";
-  const parts = [full?`I, <strong>${full}</strong>`:"I,", city, prov, cap||null].filter(Boolean);
+  const parts = [full?`I, ${full}`:"I,", city, prov, cap||null].filter(Boolean);
   const intro=$("#intro"); if(!intro) return;
   intro.innerHTML=`<h2>Affidavit of ${full||""}</h2><p class="mt-12">${parts.join(", ")}, ${oathText}</p>`;
 }

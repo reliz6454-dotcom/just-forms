@@ -183,36 +183,101 @@ function juratHTMLBlank() {
   return `
     <h2>Jurat</h2>
     <div class="jurat">
-      <p><strong>Sworn or Affirmed before me:</strong> (select one):  [ ] in person   OR   [ ] by video conference</p>
 
-      <p><em>Complete if affidavit is being sworn or affirmed in person:</em></p>
-      <p>at the (City, Town, etc.) of ............................................................ in the (County, Regional Municipality, etc.) of ............................................................, on (date) ________________________.</p>
+      <p><strong>Sworn or Affirmed before me:</strong>
+        <span class="note-italic">(select one)</span>:
+        ☐ in person &nbsp; OR &nbsp; ☐ by video conference
+      </p>
 
-      <div class="sig-row">
-        <div>______________________________________<br><span class="muted">Signature of Commissioner (or as may be)</span></div>
-        <div>__________________________________________<br><span class="muted">Signature of Deponent</span></div>
+      <!-- IN PERSON -->
+      <p class="section-title">Complete if affidavit is being sworn or affirmed in person:</p>
+      <p class="inline-fill">
+        <span>at the (City, Town, etc.) of</span><span class="fill md"></span>
+        <span>in the (County, Regional Municipality, etc.) of</span><span class="fill md"></span>,
+        <span>on (date)</span><span class="fill sm"></span>.
+      </p>
+
+      <div class="sig-grid">
+        <div class="sig">
+          <div class="sig-pad"></div>
+          <div class="sig-line"></div>
+          <div class="cap">Signature of Commissioner (or as may be)</div>
+        </div>
+        <div class="sig">
+          <div class="sig-pad"></div>
+          <div class="sig-line"></div>
+          <div class="cap">Signature of Deponent</div>
+        </div>
       </div>
 
-      <p class="mt-12"><em>Use one of the following if affidavit is being sworn or affirmed by video conference:</em></p>
+      <!-- VIDEO HEADER -->
+      <p class="section-title mt-12">
+        Use one of the following if affidavit is being sworn or affirmed by video conference:
+      </p>
 
-      <p><em>Complete if deponent and commissioner are in same city or town:</em></p>
-      <p>by ______________________ (deponent’s name) at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, before me on ______________________ (date) in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely.  ………………………………………………………<br><span class="muted">Commissioner for Taking Affidavits (or as may be)</span></p>
+      <!-- VIDEO — SAME CITY -->
+      <p class="section-title mt-12">Complete if deponent and commissioner are in same city or town:</p>
+      <p class="inline-fill">
+        <span>by</span><span class="fill sm"></span><span class="note-italic">(deponent’s name)</span>
+        <span>at the (City, Town, etc.) of</span><span class="fill md"></span>
+        <span>in the (County, Regional Municipality, etc.) of</span><span class="fill md"></span>,
+        <span>before me on</span><span class="fill sm"></span><span class="note-italic">(date)</span>
+        <span>in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely.</span>
+      </p>
 
-      <div class="sig-row">
-        <div>______________________________________<br><span class="muted">Signature of Commissioner (or as may be)</span></div>
-        <div>__________________________________________<br><span class="muted">Signature of Deponent</span></div>
+      <!-- Commissioner caption only (no rule above) -->
+      <div class="comm-block">
+        <div class="cap">Commissioner for Taking Affidavits (or as may be)</div>
       </div>
 
-      <p class="mt-12"><em>Complete if deponent and commissioner are not in same city or town:</em></p>
-      <p>by ______________________ (deponent’s name) of (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, before me at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, on ______________________ (date) in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely.  ………………………………………………………<br><span class="muted">Commissioner for Taking Affidavits (or as may be)</span></p>
-
-      <div class="sig-row">
-        <div>______________________________________<br><span class="muted">Signature of Commissioner (or as may be)</span></div>
-        <div>__________________________________________<br><span class="muted">Signature of Deponent</span></div>
+      <div class="sig-grid">
+        <div class="sig">
+          <div class="sig-pad"></div>
+          <div class="sig-line"></div>
+          <div class="cap">Signature of Commissioner (or as may be)</div>
+        </div>
+        <div class="sig">
+          <div class="sig-pad"></div>
+          <div class="sig-line"></div>
+          <div class="cap">Signature of Deponent</div>
+        </div>
       </div>
+
+      <!-- VIDEO — DIFFERENT CITIES -->
+      <p class="section-title mt-12">Complete if deponent and commissioner are not in same city or town:</p>
+      <p class="inline-fill">
+        <span>by</span><span class="fill sm"></span><span class="note-italic">(deponent’s name)</span>
+        <span>of (City, Town, etc.) of</span><span class="fill md"></span>
+        <span>in the (County, Regional Municipality, etc.) of</span><span class="fill md"></span>,
+        <span>before me at the (City, Town, etc.) of</span><span class="fill md"></span>
+        <span>in the (County, Regional Municipality, etc.) of</span><span class="fill md"></span>,
+        <span>on</span><span class="fill sm"></span><span class="note-italic">(date)</span>
+        <span>in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely.</span>
+      </p>
+
+      <!-- Commissioner caption only (no rule above) -->
+      <div class="comm-block">
+        <div class="cap">Commissioner for Taking Affidavits (or as may be)</div>
+      </div>
+
+      <div class="sig-grid">
+        <div class="sig">
+          <div class="sig-pad"></div>
+          <div class="sig-line"></div>
+          <div class="cap">Signature of Commissioner (or as may be)</div>
+        </div>
+        <div class="sig">
+          <div class="sig-pad"></div>
+          <div class="sig-line"></div>
+          <div class="cap">Signature of Deponent</div>
+        </div>
+      </div>
+
     </div>
   `;
 }
+
+
 function renderJurat() {
   const c = document.getElementById("jurat");
   if (!c) return;

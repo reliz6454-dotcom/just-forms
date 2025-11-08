@@ -288,3 +288,68 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
   border-color: #888;
   box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
 }
+
+/* =========================
+   Jurat — print-friendly
+   ========================= */
+.jurat{
+  font-family:"Times New Roman", serif;
+  font-size:12pt;
+  line-height:1.25;
+}
+.jurat h2{ font-size:16pt; margin:0 0 8px; }
+.jurat p{ margin:0 0 8px; }
+
+.jurat .note-italic{ font-style:italic; }
+.jurat .section-title{ font-weight:700; font-style:italic; margin:10px 0 6px; }
+.jurat .mt-12{ margin-top:12px; }
+
+/* Paragraphs with blanks in one line */
+.jurat .inline-fill{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 10px;
+  align-items:flex-end;              /* align to text baseline */
+}
+
+/* True “underscored” blanks that sit on the baseline */
+.jurat .fill{
+  display:inline-block;              /* gives a baseline */
+  width:18ch;                        /* default width if no size class used */
+  height:1.1em;                      /* places rule on the baseline */
+  line-height:1.1em;
+  border-bottom:1px solid #000;
+  vertical-align:baseline;
+}
+.jurat .fill.sm{ width:12ch; }       /* short names / dates */
+.jurat .fill.md{ width:22ch; }       /* typical city */
+.jurat .fill.lg{ width:34ch; }       /* county / municipality */
+
+/* Signature row: two columns (Commissioner | Deponent) */
+.jurat .sig-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:24px;
+  margin:10px 0 14px;
+}
+.jurat .sig{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.jurat .sig .sig-pad{ height:40px; } /* space to sign; adjust if needed */
+.jurat .sig .sig-line{
+  border-bottom:1px solid #000;
+  height:0;
+}
+.jurat .sig .cap{ font-style:italic; }
+
+/* Video-conference commissioner caption on its own row (no rule above) */
+.jurat .comm-block{ margin:10px 0 6px; }
+.jurat .comm-block .cap{ font-style:italic; }
+
+/* Print niceties */
+@media print{
+  .jurat h2{ margin-bottom:6pt; }
+  .jurat .sig-grid{ gap:18px; }
+}

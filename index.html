@@ -1,20 +1,3 @@
-<!--
-  index.html — General Heading Information Form
-  ---------------------------------------------------------------------------
-  Purpose:
-    • Collect court + party info used to build the General Heading that appears on every filing.
-    • Persist values in localStorage via general-heading.js (LS key "jf_case").
-    • On valid submit → navigates to affidavit-intro.html for deponent details.
-
-  Key dependencies:
-    • style.css for layout.
-    • general-heading.js wires dynamic add/remove for parties and handles submit/storage.
-
-  Notes:
-    • Court File Number accepts 3 segments (year/assigned/suffix) to match "CV-XX-XXXXXX-XXXX".
-    • Plaintiff/Defendant sections support individuals OR companies (keep one or the other per row).
-    • Motion Context is optional; exposed when "Yes" is selected.
--->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -27,16 +10,14 @@
   <section>
     <h1>General Heading Creation</h1>
     <p class="form-preamble">
-      In Ontario, all court documents begin with a <strong>general heading</strong>. This heading identifies the court, the file number, and the parties involved. Once created it will apply to all documents in your case, including affidavits. Please provide the following information:
+      In Ontario, all court documents begin with a <strong>general heading</strong>. This heading identifies the court, the file number, and the parties involved. Once created it will apply to all documents in your case. Please provide the following information.
     </p>
 
-    <!-- Form is validated/enhanced and stored by general-heading.js -->
     <form id="general-heading-form">
       <!-- Court Information -->
       <fieldset>
         <legend>Court Information</legend>
 
-        <!-- Court File No. broken into segments to reduce input errors -->
         <label for="court-file-year">Court File Number: CV -</label>
         <input type="text" id="court-file-year" name="courtfile-number-year" maxlength="2" size="2"> -
         <input type="text" id="court-file-assigned" name="courtfile-number-assigned" maxlength="6" size="6"> -
@@ -52,62 +33,247 @@
       <fieldset id="plaintiff-information">
         <legend>Plaintiff(s) Information</legend>
 
-        <!-- Guidance for individuals vs companies -->
         <p class="form-instruction">
-          Enter the first plaintiff (the first name listed on your Statement of Claim or Notice of Application).
-        </p>
-        <p class="form-instruction">
-          If the plaintiff is an individual, use First and Last Name. If it is a company, leave the person fields blank and enter the full legal company name.
+          Enter each plaintiff exactly as named in your Statement of Claim/Notice of Application. For each party, provide contact details (required even if represented), and indicate if they are represented by counsel.
         </p>
 
-        <!-- First plaintiff (always visible; extras cloned from template below) -->
-        <div class="party-block party-first" data-index="1">
+        <!-- First plaintiff (always visible) -->
+        <div class="party-block party-first" data-index="1" data-role="pl">
+          <!-- Identity -->
           <div class="name-row">
-            <div>
-              <label for="plaintiff-first-name">First Name:</label>
-              <input type="text" id="plaintiff-first-name" class="pl-first" placeholder="e.g. John">
+            <div class="cell">
+              <label for="pl-first-1">First Name:</label>
+              <input type="text" id="pl-first-1" class="pl-first" placeholder="e.g. John">
             </div>
-            <div>
-              <label for="plaintiff-last-name">Last Name:</label>
-              <input type="text" id="plaintiff-last-name" class="pl-last" placeholder="e.g. Smith">
+            <div class="cell">
+              <label for="pl-last-1">Last Name:</label>
+              <input type="text" id="pl-last-1" class="pl-last" placeholder="e.g. Smith">
+            </div>
+          </div>
+          <div class="or-separator">– OR –</div>
+          <div>
+            <label for="pl-company-1">Company Legal Name:</label>
+            <input type="text" id="pl-company-1" class="pl-company" placeholder="e.g. 123 Ontario Inc.">
+          </div>
+
+          <!-- Contact (required) -->
+          <div class="mt-12">
+            <div class="name-row">
+              <div class="cell">
+                <label for="pl-addr1-1">Address 1:</label>
+                <input type="text" id="pl-addr1-1" class="pl-addr1" placeholder="Street address">
+              </div>
+              <div class="cell">
+                <label for="pl-addr2-1">Address 2:</label>
+                <input type="text" id="pl-addr2-1" class="pl-addr2" placeholder="Unit, Suite (optional)">
+              </div>
+            </div>
+            <div class="name-row">
+              <div class="cell">
+                <label for="pl-city-1">City:</label>
+                <input type="text" id="pl-city-1" class="pl-city" placeholder="e.g. Toronto">
+              </div>
+              <div class="cell">
+                <label for="pl-prov-1">Province:</label>
+                <input type="text" id="pl-prov-1" class="pl-prov" placeholder="e.g. Ontario">
+              </div>
+            </div>
+            <div class="name-row">
+              <div class="cell">
+                <label for="pl-postal-1">Postal Code:</label>
+                <input type="text" id="pl-postal-1" class="pl-postal" placeholder="e.g. M5J 2N1">
+              </div>
+              <div class="cell">
+                <label for="pl-phone-1">Phone:</label>
+                <input type="text" id="pl-phone-1" class="pl-phone" placeholder="e.g. 416-555-1234">
+              </div>
+            </div>
+            <div class="name-row">
+              <div class="cell">
+                <label for="pl-email-1">Email:</label>
+                <input type="email" id="pl-email-1" class="pl-email" placeholder="name@example.com">
+              </div>
             </div>
           </div>
 
-          <div class="or-separator">– OR –</div>
+          <!-- Representation -->
+          <div class="mt-12">
+            <label>
+              <input type="checkbox" class="pl-represented">
+              Represented by counsel
+            </label>
 
-          <div>
-            <label for="plaintiff-company">Company Legal Name:</label>
-            <input type="text" id="plaintiff-company" class="pl-company" placeholder="e.g. 123 Ontario Inc.">
+            <div class="lawyer-fields mt-12" hidden>
+              <div class="name-row">
+                <div class="cell">
+                  <label>Firm Name:</label>
+                  <input type="text" class="pl-law-firm" placeholder="e.g. Gowling WLG (Canada) LLP">
+                </div>
+                <div class="cell">
+                  <label>Lawyer Name:</label>
+                  <input type="text" class="pl-law-first" placeholder="First">
+                  <input type="text" class="pl-law-last" placeholder="Last" style="margin-left:8px;">
+                </div>
+              </div>
+              <div class="name-row">
+                <div class="cell">
+                  <label>Address 1:</label>
+                  <input type="text" class="pl-law-addr1" placeholder="Street address">
+                </div>
+                <div class="cell">
+                  <label>Address 2:</label>
+                  <input type="text" class="pl-law-addr2" placeholder="Unit, Suite (optional)">
+                </div>
+              </div>
+              <div class="name-row">
+                <div class="cell">
+                  <label>City:</label>
+                  <input type="text" class="pl-law-city" placeholder="e.g. Toronto">
+                </div>
+                <div class="cell">
+                  <label>Province:</label>
+                  <input type="text" class="pl-law-prov" placeholder="e.g. Ontario">
+                </div>
+              </div>
+              <div class="name-row">
+                <div class="cell">
+                  <label>Postal Code:</label>
+                  <input type="text" class="pl-law-postal" placeholder="e.g. M5J 2N1">
+                </div>
+                <div class="cell">
+                  <label>Phone:</label>
+                  <input type="text" class="pl-law-phone" placeholder="e.g. 416-555-1234">
+                </div>
+              </div>
+              <div class="name-row">
+                <div class="cell">
+                  <label>Email:</label>
+                  <input type="email" class="pl-law-email" placeholder="lawyer@example.com">
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="party-actions">
-            <!-- First row: only an "add" button; remove is on subsequent rows -->
             <button type="button" id="add-plaintiff-initial" class="add-party-btn">+ Add another plaintiff</button>
           </div>
         </div>
 
-        <!-- Added plaintiffs appear here (managed by general-heading.js) -->
         <div id="extra-plaintiffs" class="party-list"></div>
 
-        <!-- Template for additional plaintiffs (cloned by general-heading.js) -->
+        <!-- Template: additional plaintiffs -->
         <template id="plaintiff-row-template">
-          <div class="party-block" data-index="">
+          <div class="party-block" data-role="pl">
             <div class="name-row">
-              <div>
+              <div class="cell">
                 <label>First Name:</label>
                 <input type="text" class="pl-first" placeholder="e.g. Jane">
               </div>
-              <div>
+              <div class="cell">
                 <label>Last Name:</label>
                 <input type="text" class="pl-last" placeholder="e.g. Doe">
               </div>
             </div>
-
             <div class="or-separator">– OR –</div>
-
             <div>
               <label>Company Legal Name:</label>
               <input type="text" class="pl-company" placeholder="e.g. ABC Corporation">
+            </div>
+
+            <div class="mt-12">
+              <div class="name-row">
+                <div class="cell">
+                  <label>Address 1:</label>
+                  <input type="text" class="pl-addr1" placeholder="Street address">
+                </div>
+                <div class="cell">
+                  <label>Address 2:</label>
+                  <input type="text" class="pl-addr2" placeholder="Unit, Suite (optional)">
+                </div>
+              </div>
+              <div class="name-row">
+                <div class="cell">
+                  <label>City:</label>
+                  <input type="text" class="pl-city" placeholder="e.g. Toronto">
+                </div>
+                <div class="cell">
+                  <label>Province:</label>
+                  <input type="text" class="pl-prov" placeholder="e.g. Ontario">
+                </div>
+              </div>
+              <div class="name-row">
+                <div class="cell">
+                  <label>Postal Code:</label>
+                  <input type="text" class="pl-postal" placeholder="e.g. M5J 2N1">
+                </div>
+                <div class="cell">
+                  <label>Phone:</label>
+                  <input type="text" class="pl-phone" placeholder="e.g. 416-555-1234">
+                </div>
+              </div>
+              <div class="name-row">
+                <div class="cell">
+                  <label>Email:</label>
+                  <input type="email" class="pl-email" placeholder="name@example.com">
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-12">
+              <label>
+                <input type="checkbox" class="pl-represented">
+                Represented by counsel
+              </label>
+
+              <div class="lawyer-fields mt-12" hidden>
+                <div class="name-row">
+                  <div class="cell">
+                    <label>Firm Name:</label>
+                    <input type="text" class="pl-law-firm" placeholder="Firm">
+                  </div>
+                  <div class="cell">
+                    <label>Lawyer Name:</label>
+                    <input type="text" class="pl-law-first" placeholder="First">
+                    <input type="text" class="pl-law-last" placeholder="Last" style="margin-left:8px;">
+                  </div>
+                </div>
+                <div class="name-row">
+                  <div class="cell">
+                    <label>Address 1:</label>
+                    <input type="text" class="pl-law-addr1" placeholder="Street address">
+                  </div>
+                  <div class="cell">
+                    <label>Address 2:</label>
+                    <input type="text" class="pl-law-addr2" placeholder="Unit, Suite (optional)">
+                  </div>
+                </div>
+                <div class="name-row">
+                  <div class="cell">
+                    <label>City:</label>
+                    <input type="text" class="pl-law-city" placeholder="City">
+                  </div>
+                  <div class="cell">
+                    <label>Province:</label>
+                    <input type="text" class="pl-law-prov" placeholder="Province">
+                  </div>
+                </div>
+                <div class="name-row">
+                  <div class="cell">
+                    <label>Postal Code:</label>
+                    <input type="text" class="pl-law-postal" placeholder="Postal code">
+                  </div>
+                  <div class="cell">
+                    <label>Phone:</label>
+                    <input type="text" class="pl-law-phone" placeholder="Phone">
+                  </div>
+                </div>
+                <div class="name-row">
+                  <div class="cell">
+                    <label>Email:</label>
+                    <input type="email" class="pl-law-email" placeholder="Email">
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="party-actions">
@@ -123,33 +289,121 @@
         <legend>Defendant(s) Information</legend>
 
         <p class="form-instruction">
-          Enter the first defendant (the first name listed on your Statement of Claim or Notice of Application).
-        </p>
-        <p class="form-instruction">
-          If the defendant is an individual, use First and Last Name.
-        </p>
-        <p class="form-instruction">
-          If the defendant is a company, leave the person fields blank and enter the full legal company name.
+          Enter each defendant exactly as named in your Statement of Claim/Notice of Application. Provide contact details and indicate if represented by counsel.
         </p>
 
         <!-- First defendant (always visible) -->
-        <div class="party-block def-party-first" data-index="1">
+        <div class="party-block def-party-first" data-index="1" data-role="df">
           <div class="name-row">
-            <div>
-              <label for="df-first">First Name:</label>
-              <input type="text" class="df-first" id="df-first" name="defendant-first" placeholder="e.g. John">
+            <div class="cell">
+              <label for="df-first-1">First Name:</label>
+              <input type="text" class="df-first" id="df-first-1" placeholder="e.g. John">
             </div>
-            <div>
-              <label for="df-last">Last Name:</label>
-              <input type="text" class="df-last" id="df-last" name="defendant-last" placeholder="e.g. Smith">
+            <div class="cell">
+              <label for="df-last-1">Last Name:</label>
+              <input type="text" class="df-last" id="df-last-1" placeholder="e.g. Smith">
+            </div>
+          </div>
+          <div class="or-separator">– OR –</div>
+          <div>
+            <label for="df-company-1">Company Legal Name:</label>
+            <input type="text" class="df-company" id="df-company-1" placeholder="e.g. ABC Ontario Inc.">
+          </div>
+
+          <div class="mt-12">
+            <div class="name-row">
+              <div class="cell">
+                <label for="df-addr1-1">Address 1:</label>
+                <input type="text" id="df-addr1-1" class="df-addr1" placeholder="Street address">
+              </div>
+              <div class="cell">
+                <label for="df-addr2-1">Address 2:</label>
+                <input type="text" id="df-addr2-1" class="df-addr2" placeholder="Unit, Suite (optional)">
+              </div>
+            </div>
+            <div class="name-row">
+              <div class="cell">
+                <label for="df-city-1">City:</label>
+                <input type="text" id="df-city-1" class="df-city" placeholder="e.g. Toronto">
+              </div>
+              <div class="cell">
+                <label for="df-prov-1">Province:</label>
+                <input type="text" id="df-prov-1" class="df-prov" placeholder="e.g. Ontario">
+              </div>
+            </div>
+            <div class="name-row">
+              <div class="cell">
+                <label for="df-postal-1">Postal Code:</label>
+                <input type="text" id="df-postal-1" class="df-postal" placeholder="e.g. M5J 2N1">
+              </div>
+              <div class="cell">
+                <label for="df-phone-1">Phone:</label>
+                <input type="text" id="df-phone-1" class="df-phone" placeholder="e.g. 416-555-1234">
+              </div>
+            </div>
+            <div class="name-row">
+              <div class="cell">
+                <label for="df-email-1">Email:</label>
+                <input type="email" id="df-email-1" class="df-email" placeholder="name@example.com">
+              </div>
             </div>
           </div>
 
-          <div class="or-separator">– OR –</div>
+          <div class="mt-12">
+            <label>
+              <input type="checkbox" class="df-represented">
+              Represented by counsel
+            </label>
 
-          <div>
-            <label for="df-company">Company Legal Name:</label>
-            <input type="text" class="df-company" id="df-company" name="defendant-company" placeholder="e.g. ABC Ontario Inc.">
+            <div class="lawyer-fields mt-12" hidden>
+              <div class="name-row">
+                <div class="cell">
+                  <label>Firm Name:</label>
+                  <input type="text" class="df-law-firm" placeholder="Firm">
+                </div>
+                <div class="cell">
+                  <label>Lawyer Name:</label>
+                  <input type="text" class="df-law-first" placeholder="First">
+                  <input type="text" class="df-law-last" placeholder="Last" style="margin-left:8px;">
+                </div>
+              </div>
+              <div class="name-row">
+                <div class="cell">
+                  <label>Address 1:</label>
+                  <input type="text" class="df-law-addr1" placeholder="Street address">
+                </div>
+                <div class="cell">
+                  <label>Address 2:</label>
+                  <input type="text" class="df-law-addr2" placeholder="Unit, Suite (optional)">
+                </div>
+              </div>
+              <div class="name-row">
+                <div class="cell">
+                  <label>City:</label>
+                  <input type="text" class="df-law-city" placeholder="City">
+                </div>
+                <div class="cell">
+                  <label>Province:</label>
+                  <input type="text" class="df-law-prov" placeholder="Province">
+                </div>
+              </div>
+              <div class="name-row">
+                <div class="cell">
+                  <label>Postal Code:</label>
+                  <input type="text" class="df-law-postal" placeholder="Postal code">
+                </div>
+                <div class="cell">
+                  <label>Phone:</label>
+                  <input type="text" class="df-law-phone" placeholder="Phone">
+                </div>
+              </div>
+              <div class="name-row">
+                <div class="cell">
+                  <label>Email:</label>
+                  <input type="email" class="df-law-email" placeholder="Email">
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="party-actions">
@@ -157,28 +411,121 @@
           </div>
         </div>
 
-        <!-- Added defendants appear here -->
         <div id="extra-defendants" class="party-list"></div>
 
-        <!-- Template for additional defendants -->
+        <!-- Template: additional defendants -->
         <template id="defendant-row-template">
-          <div class="party-block" data-index="">
+          <div class="party-block" data-role="df">
             <div class="name-row">
-              <div>
+              <div class="cell">
                 <label>First Name:</label>
                 <input type="text" class="df-first" placeholder="e.g. Jane">
               </div>
-              <div>
+              <div class="cell">
                 <label>Last Name:</label>
                 <input type="text" class="df-last" placeholder="e.g. Doe">
               </div>
             </div>
-
             <div class="or-separator">– OR –</div>
-
             <div>
               <label>Company Legal Name:</label>
               <input type="text" class="df-company" placeholder="e.g. XYZ Ltd.">
+            </div>
+
+            <div class="mt-12">
+              <div class="name-row">
+                <div class="cell">
+                  <label>Address 1:</label>
+                  <input type="text" class="df-addr1" placeholder="Street address">
+                </div>
+                <div class="cell">
+                  <label>Address 2:</label>
+                  <input type="text" class="df-addr2" placeholder="Unit, Suite (optional)">
+                </div>
+              </div>
+              <div class="name-row">
+                <div class="cell">
+                  <label>City:</label>
+                  <input type="text" class="df-city" placeholder="City">
+                </div>
+                <div class="cell">
+                  <label>Province:</label>
+                  <input type="text" class="df-prov" placeholder="Province">
+                </div>
+              </div>
+              <div class="name-row">
+                <div class="cell">
+                  <label>Postal Code:</label>
+                  <input type="text" class="df-postal" placeholder="Postal code">
+                </div>
+                <div class="cell">
+                  <label>Phone:</label>
+                  <input type="text" class="df-phone" placeholder="Phone">
+                </div>
+              </div>
+              <div class="name-row">
+                <div class="cell">
+                  <label>Email:</label>
+                  <input type="email" class="df-email" placeholder="Email">
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-12">
+              <label>
+                <input type="checkbox" class="df-represented">
+                Represented by counsel
+              </label>
+
+              <div class="lawyer-fields mt-12" hidden>
+                <div class="name-row">
+                  <div class="cell">
+                    <label>Firm Name:</label>
+                    <input type="text" class="df-law-firm" placeholder="Firm">
+                  </div>
+                  <div class="cell">
+                    <label>Lawyer Name:</label>
+                    <input type="text" class="df-law-first" placeholder="First">
+                    <input type="text" class="df-law-last" placeholder="Last" style="margin-left:8px;">
+                  </div>
+                </div>
+                <div class="name-row">
+                  <div class="cell">
+                    <label>Address 1:</label>
+                    <input type="text" class="df-law-addr1" placeholder="Street address">
+                  </div>
+                  <div class="cell">
+                    <label>Address 2:</label>
+                    <input type="text" class="df-law-addr2" placeholder="Unit, Suite (optional)">
+                  </div>
+                </div>
+                <div class="name-row">
+                  <div class="cell">
+                    <label>City:</label>
+                    <input type="text" class="df-law-city" placeholder="City">
+                  </div>
+                  <div class="cell">
+                    <label>Province:</label>
+                    <input type="text" class="df-law-prov" placeholder="Province">
+                  </div>
+                </div>
+                <div class="name-row">
+                  <div class="cell">
+                    <label>Postal Code:</label>
+                    <input type="text" class="df-law-postal" placeholder="Postal code">
+                  </div>
+                  <div class="cell">
+                    <label>Phone:</label>
+                    <input type="text" class="df-law-phone" placeholder="Phone">
+                  </div>
+                </div>
+                <div class="name-row">
+                  <div class="cell">
+                    <label>Email:</label>
+                    <input type="email" class="df-law-email" placeholder="Email">
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="party-actions">
@@ -188,13 +535,11 @@
           </div>
         </template>
       </fieldset>
-          <!-- Motion Context (optional UI revealed by radio selection) -->
+
+      <!-- Motion Context (optional) -->
       <fieldset id="motion-context">
         <legend>Motion Context</legend>
-
-        <p class="form-instruction">
-          Will this general heading be used for a motion?
-        </p>
+        <p class="form-instruction">Will this general heading be used for a motion?</p>
 
         <div role="radiogroup" aria-labelledby="motion-q">
           <span id="motion-q" class="visually-hidden">Motion?</span>
@@ -208,7 +553,6 @@
           </label>
         </div>
 
-        <!-- Shown when "Yes" is selected; choice persisted inside jf_case.motion -->
         <div id="motion-fields" hidden style="margin-top:8px">
           <p class="form-instruction">Which side is the <strong>Moving Party</strong>?</p>
           <label>
@@ -227,7 +571,6 @@
   </section>
 </main>
 
-<!-- Wires up dynamic rows, validation, storage, and navigation to next step -->
 <script src="general-heading.js"></script>
 </body>
 </html>

@@ -1,4 +1,3 @@
-
 // affidavit-body.js — TipTap-only editors per paragraph + atomic exhibit chips (Node)
 // No execCommand, no manual contentEditable handlers — purely TipTap.
 
@@ -18,9 +17,9 @@ const $ = (sel, el = document) => el.querySelector(sel);
 const elx = (tag, props = {}, ...children) => {
   const node = document.createElement(tag);
   if (props) {
-    const { dataset, ...rest } = props;
+    // Intentionally ignore props.dataset — we'll set dataset explicitly after creation
+    const { dataset: _ignore, ...rest } = props;
     if (Object.keys(rest || {}).length) Object.assign(node, rest);
-    if (dataset) for (const [k, v] of Object.entries(dataset)) node.dataset[k] = v;
   }
   for (const c of children) if (c != null) node.append(c);
   return node;
@@ -90,7 +89,7 @@ function computeLabels(paras){
   return map;
 }
 
-/* ---------- NEW: relabel saved HTML chip text on scheme change ---------- */
+/* ---------- relabel saved HTML chip text on scheme change ---------- */
 function relabelParagraphHTML(p, labels) {
   if (!p || !p.html) return false;
   const div = document.createElement("div");
@@ -110,7 +109,6 @@ function relabelParagraphHTML(p, labels) {
   if (changed) p.html = div.innerHTML;
   return changed;
 }
-
 function relabelAllChips() {
   const list = loadParas().sort(byNo).map(ensureRuns);
   const labels = computeLabels(list);
@@ -119,7 +117,7 @@ function relabelAllChips() {
   if (changed) saveParas(list);
 }
 
-/* ---------- Heading & intro (unchanged) ---------- */
+/* ---------- Heading & intro ---------- */
 function partyName(p){ if(!p)return""; const co=(p.company||"").trim(); const person=[p.first||"",p.last||""].map(s=>s.trim()).filter(Boolean).join(" ").trim(); return co||person||""; }
 const listNames=(arr)=> (Array.isArray(arr)?arr:[]).map(partyName).filter(Boolean);
 function etAl(names,limit=3){ return names.length<=limit?names.join(", "):names.slice(0,limit).join(", ")+", et al."; }
@@ -178,6 +176,47 @@ function renderIntro(){
   const parts = [full?`I, <strong>${full}</strong>`:"I,", city, prov, cap||null].filter(Boolean);
   const intro=$("#intro"); if(!intro) return;
   intro.innerHTML=`<h2>Affidavit of ${full||""}</h2><p class="mt-12">${parts.join(", ")}, ${oathText}</p>`;
+}
+
+/* ---------- Jurat (blank display; matches Form 4D options) ---------- */
+function juratHTMLBlank() {
+  return `
+    <h2>Jurat</h2>
+    <div class="jurat">
+      <p><strong>Sworn or Affirmed before me:</strong> (select one):  [ ] in person   OR   [ ] by video conference</p>
+
+      <p><em>Complete if affidavit is being sworn or affirmed in person:</em></p>
+      <p>at the (City, Town, etc.) of ............................................................ in the (County, Regional Municipality, etc.) of ............................................................, on (date) ________________________.</p>
+
+      <div class="sig-row">
+        <div>______________________________________<br><span class="muted">Signature of Commissioner (or as may be)</span></div>
+        <div>__________________________________________<br><span class="muted">Signature of Deponent</span></div>
+      </div>
+
+      <p class="mt-12"><em>Use one of the following if affidavit is being sworn or affirmed by video conference:</em></p>
+
+      <p><em>Complete if deponent and commissioner are in same city or town:</em></p>
+      <p>by ______________________ (deponent’s name) at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, before me on ______________________ (date) in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely.  ………………………………………………………<br><span class="muted">Commissioner for Taking Affidavits (or as may be)</span></p>
+
+      <div class="sig-row">
+        <div>______________________________________<br><span class="muted">Signature of Commissioner (or as may be)</span></div>
+        <div>__________________________________________<br><span class="muted">Signature of Deponent</span></div>
+      </div>
+
+      <p class="mt-12"><em>Complete if deponent and commissioner are not in same city or town:</em></p>
+      <p>by ______________________ (deponent’s name) of (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, before me at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, on ______________________ (date) in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely.  ………………………………………………………<br><span class="muted">Commissioner for Taking Affidavits (or as may be)</span></p>
+
+      <div class="sig-row">
+        <div>______________________________________<br><span class="muted">Signature of Commissioner (or as may be)</span></div>
+        <div>__________________________________________<br><span class="muted">Signature of Deponent</span></div>
+      </div>
+    </div>
+  `;
+}
+function renderJurat() {
+  const c = document.getElementById("jurat");
+  if (!c) return;
+  c.innerHTML = juratHTMLBlank();
 }
 
 /* --- TipTap ExhibitChip: inline atomic node with hard delete guard + commands --- */
@@ -280,7 +319,6 @@ const SmartListExit = Extension.create({
       editor.isActive('listItem') || editor.isActive('orderedList') || editor.isActive('bulletList')
     );
 
-    // Exit list even if caret is not strictly at column 0, as long as the item is effectively empty
     const exitEmptyListItem = (editor) => {
       const { state } = editor;
       if (!inAnyList(editor)) return false;
@@ -301,7 +339,6 @@ const SmartListExit = Extension.create({
       }
 
       if (changed) {
-        // Force plain paragraph on the same line; do NOT join with previous block
         editor.chain().focus().setParagraph().run();
         return true;
       }
@@ -310,11 +347,11 @@ const SmartListExit = Extension.create({
 
     return {
       Backspace: ({ editor }) => {
-        if (exitEmptyListItem(editor)) return true; // behave like Word/Docs Enter→Backspace
+        if (exitEmptyListItem(editor)) return true;
         return false;
       },
       Delete: ({ editor }) => {
-        if (exitEmptyListItem(editor)) return true; // forward delete should also exit
+        if (exitEmptyListItem(editor)) return true;
         return false;
       },
     };
@@ -358,11 +395,8 @@ function createEditor(mount, p, labels){
   const editor = new Editor({
     element: mount,
     extensions: [
-      // Our list-exit logic must win
       SmartListExit,
-      // Explicit list schema + keymap per TipTap docs
       OrderedList, BulletList, ListItem, ListKeymap,
-      // Base kit
       StarterKit,
       Underline,
       ExhibitChip,
@@ -398,7 +432,7 @@ function addExhibits(pId, entries){
 
   const labels=computeLabels(loadParas());
   const ed=EDITORS.get(pId);
-  if(ed){ for(const exId of newIds) ed.commands.insertExhibitChip({ exId, label: labels.get(exId)||"?" }); }
+  if(ed){ for(const exId of newIds){ ed.commands.insertExhibitChip({ exId, label: labels.get(exId)||"?" }); } }
 }
 function moveExhibit(pId, exId, dir){
   histPush();
@@ -501,8 +535,15 @@ async function onMetaSave(){
 
 /* ---------- Paragraph row (TipTap-only) ---------- */
 function buildToolbar(p){
-  const tb=elx("div",{className:"rte-toolbar",dataset:{pid:p.id}});
-  const btn=(t,a,title)=>elx("button",{type:"button",innerText:t,title:title||t,dataset:{a}});
+  const tb=elx("div",{className:"rte-toolbar"});
+  tb.dataset.pid = p.id;
+
+  const btn = (t, a, title) => {
+    const b = elx("button",{type:"button",innerText:t,title:title||t});
+    b.dataset.action = a;
+    return b;
+  };
+
   tb.append(
     btn("B","bold","Bold"), btn("i","italic","Italic"), btn("U","underline","Underline"),
     elx("span",{className:"sep"}), btn("•","bullet","Toggle bulleted list"), btn("a.","ordered","Toggle a./b./c. list"),
@@ -510,7 +551,8 @@ function buildToolbar(p){
     elx("span",{className:"sep"}), btn("Clear","clear","Clear formatting")
   );
   tb.addEventListener("click",(e)=>{
-    const a=e.target?.dataset?.a; if(!a) return;
+    const a=e.target?.dataset?.action;
+    if(!a) return;
     const ed=EDITORS.get(p.id); if(!ed) return;
     const chain=ed.chain().focus();
     switch(a){
@@ -563,7 +605,9 @@ function renderRow(p,total,labels){
   function renderRail(){
     [...strip.querySelectorAll(".rail-chip")].forEach(n=>n.remove());
     (p.exhibits||[]).forEach((ex,idx)=>{
-      const chip=elx("div",{className:"exhibit-chip rail-chip",dataset:{exId:ex.id}});
+      const chip=elx("div",{className:"exhibit-chip rail-chip"});
+      chip.dataset.exId = ex.id;
+
       const label=labels.get(ex.id)||""; 
       const L=elx("span",{className:"pill exhibit-label",innerText:`exhibit "${label}"`,title:"Edit exhibit details"});
       const N=elx("span",{className:"exhibit-name",innerText:`• ${ex.name||"Exhibit"}`,title:"Edit exhibit details"});
@@ -650,8 +694,6 @@ document.addEventListener("DOMContentLoaded", async ()=>{
       const s=toggle.checked?"numbers":"letters"; 
       setExhibitScheme(s); 
       if(textEl) textEl.textContent=toggle.checked?"Numbers":"Letters";
-
-      // Rewrite saved HTML chip text to match the new scheme, then re-render
       relabelAllChips();
       renderParagraphs(); 
     });
@@ -681,9 +723,10 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   if(loadParas().length===0) addPara();
   renderParagraphs();
 
+  renderJurat(); // show blank jurat card
+
   const addEnd=$("#addParaEnd"); if(addEnd) addEnd.onclick=()=>{ addPara(); renderParagraphs(); };
 
   if(UNDO.length===0) UNDO.push(snap());
   syncUndoUI();
 });
-

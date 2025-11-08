@@ -43,16 +43,17 @@ function readPartyNode(node, cls) {
   let lawyer = null;
   if (represented) {
     lawyer = {
-      firm:   node.querySelector(`.${cls}-law-firm`)?.value.trim()   || "",
-      first:  node.querySelector(`.${cls}-law-first`)?.value.trim()  || "",
-      last:   node.querySelector(`.${cls}-law-last`)?.value.trim()   || "",
-      addr1:  node.querySelector(`.${cls}-law-addr1`)?.value.trim()  || "",
-      addr2:  node.querySelector(`.${cls}-law-addr2`)?.value.trim()  || "",
-      city:   node.querySelector(`.${cls}-law-city`)?.value.trim()   || "",
-      prov:   node.querySelector(`.${cls}-law-prov`)?.value.trim()   || "",
-      postal: node.querySelector(`.${cls}-law-postal`)?.value.trim() || "",
-      phone:  node.querySelector(`.${cls}-law-phone`)?.value.trim()  || "",
-      email:  node.querySelector(`.${cls}-law-email`)?.value.trim()  || "",
+      firm:     node.querySelector(`.${cls}-law-firm`)?.value.trim()     || "",
+      first:    node.querySelector(`.${cls}-law-first`)?.value.trim()    || "",
+      last:     node.querySelector(`.${cls}-law-last`)?.value.trim()     || "",
+      addr1:    node.querySelector(`.${cls}-law-addr1`)?.value.trim()    || "",
+      addr2:    node.querySelector(`.${cls}-law-addr2`)?.value.trim()    || "",
+      city:     node.querySelector(`.${cls}-law-city`)?.value.trim()     || "",
+      prov:     node.querySelector(`.${cls}-law-prov`)?.value.trim()     || "",
+      postal:   node.querySelector(`.${cls}-law-postal`)?.value.trim()   || "",
+      phone:    node.querySelector(`.${cls}-law-phone`)?.value.trim()    || "",
+      email:    node.querySelector(`.${cls}-law-email`)?.value.trim()    || "",
+      license:  node.querySelector(`.${cls}-law-license`)?.value.trim()  || "",
     };
   }
 
@@ -109,15 +110,15 @@ function requireLawyerIfRepresented(node, cls, partyLabel) {
   if (!represented) return true;
 
   const need = [
-    [`.${cls}-law-firm`,   "law firm"],
-    [`.${cls}-law-first`,  "lawyer first name"],
-    [`.${cls}-law-last`,   "lawyer last name"],
-    [`.${cls}-law-addr1`,  "lawyer address 1"],
-    [`.${cls}-law-city`,   "lawyer city"],
-    [`.${cls}-law-prov`,   "lawyer province"],
-    [`.${cls}-law-postal`, "lawyer postal code"],
-    [`.${cls}-law-phone`,  "lawyer phone"],
-    [`.${cls}-law-email`,  "lawyer email"],
+    [`.${cls}-law-first`,   "lawyer first name"],
+    [`.${cls}-law-last`,    "lawyer last name"],
+    [`.${cls}-law-addr1`,   "lawyer address 1"],
+    [`.${cls}-law-city`,    "lawyer city"],
+    [`.${cls}-law-prov`,    "lawyer province"],
+    [`.${cls}-law-postal`,  "lawyer postal code"],
+    [`.${cls}-law-phone`,   "lawyer phone"],
+    [`.${cls}-law-email`,   "lawyer email"],
+    [`.${cls}-law-license`, "lawyer licence number"],
   ];
   for (const [sel, name] of need) {
     const el = node.querySelector(sel);

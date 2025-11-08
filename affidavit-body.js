@@ -1,3 +1,4 @@
+
 // affidavit-body.js — TipTap-only editors per paragraph + atomic exhibit chips (Node)
 // No execCommand, no manual contentEditable handlers — purely TipTap.
 
@@ -87,6 +88,35 @@ function computeLabels(paras){
   const scheme=getExhibitScheme(); const map=new Map(); let idx=0;
   paras.sort(byNo).forEach(p=> (p.exhibits||[]).forEach(ex=>{ map.set(ex.id,labelFor(idx,scheme)); idx++; }));
   return map;
+}
+
+/* ---------- NEW: relabel saved HTML chip text on scheme change ---------- */
+function relabelParagraphHTML(p, labels) {
+  if (!p || !p.html) return false;
+  const div = document.createElement("div");
+  div.innerHTML = p.html;
+  let changed = false;
+
+  div.querySelectorAll('.exh-chip[data-ex-id]').forEach(n => {
+    const id = n.getAttribute('data-ex-id') || '';
+    const lab = labels.get(id) || '?';
+    const newText = `exhibit "${lab}"`;
+    if (n.textContent !== newText) {
+      n.textContent = newText;
+      changed = true;
+    }
+  });
+
+  if (changed) p.html = div.innerHTML;
+  return changed;
+}
+
+function relabelAllChips() {
+  const list = loadParas().sort(byNo).map(ensureRuns);
+  const labels = computeLabels(list);
+  let changed = false;
+  for (const p of list) changed = relabelParagraphHTML(p, labels) || changed;
+  if (changed) saveParas(list);
 }
 
 /* ---------- Heading & intro (unchanged) ---------- */
@@ -214,7 +244,7 @@ const ExhibitChip = Node.create({
   },
 });
 
-/* --- SmartListExit:/* --- SmartListExit v3: Backspace/Delete exit list like Enter (ZWSP + chips aware) --- */
+/* --- SmartListExit v3: Backspace/Delete exit list like Enter (ZWSP + chips aware) --- */
 const SMART_KEY = new PluginKey("smartListExit");
 
 const SmartListExit = Extension.create({
@@ -616,7 +646,15 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   const toggle=$("#schemeToggle"), textEl=$("#schemeText");
   if(toggle){
     const cur=getExhibitScheme(); toggle.checked=(cur==="numbers"); if(textEl) textEl.textContent=toggle.checked?"Numbers":"Letters";
-    toggle.addEventListener("change",()=>{ const s=toggle.checked?"numbers":"letters"; setExhibitScheme(s); if(textEl) textEl.textContent=toggle.checked?"Numbers":"Letters"; renderParagraphs(); });
+    toggle.addEventListener("change",()=>{ 
+      const s=toggle.checked?"numbers":"letters"; 
+      setExhibitScheme(s); 
+      if(textEl) textEl.textContent=toggle.checked?"Numbers":"Letters";
+
+      // Rewrite saved HTML chip text to match the new scheme, then re-render
+      relabelAllChips();
+      renderParagraphs(); 
+    });
   }
 
   const ub=$("#undoBtn"), rb=$("#redoBtn"); if(ub) ub.onclick=undo; if(rb) rb.onclick=redo;
@@ -648,3 +686,4 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   if(UNDO.length===0) UNDO.push(snap());
   syncUndoUI();
 });
+

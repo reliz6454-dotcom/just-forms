@@ -17,7 +17,6 @@ const $ = (sel, el = document) => el.querySelector(sel);
 const elx = (tag, props = {}, ...children) => {
   const node = document.createElement(tag);
   if (props) {
-    // Intentionally ignore props.dataset — we'll set dataset explicitly after creation
     const { dataset: _ignore, ...rest } = props;
     if (Object.keys(rest || {}).length) Object.assign(node, rest);
   }
@@ -135,7 +134,6 @@ function lawyerCaption(caseData, deponent){
   const roleSingular = side === "plaintiff" ? "Plaintiff" : "Defendant";
   const rolePlural   = side === "plaintiff" ? "Plaintiffs" : "Defendants";
 
-  // “All Plaintiffs/Defendants”
   if (deponent.lawyerAllParties) {
     return `the lawyer for the ${rolePlural}`;
   }
@@ -146,12 +144,8 @@ function lawyerCaption(caseData, deponent){
     .map(partyName)
     .filter(Boolean);
 
-  if (names.length === 1) {
-    return `the lawyer for the ${roleSingular} ${names[0]}`;
-  }
-  if (names.length > 1) {
-    return `the lawyer for the ${rolePlural} ${joinAnd(names)}`;
-  }
+  if (names.length === 1) return `the lawyer for the ${roleSingular} ${names[0]}`;
+  if (names.length > 1)   return `the lawyer for the ${rolePlural} ${joinAnd(names)}`;
   return "the lawyer for a party";
 }
 function roleLabel(side,count,isMotion,movingSide){
@@ -211,7 +205,7 @@ function renderIntro(){
       cap = `the ${role}`;
       break;
     case "lawyer":
-      cap = lawyerCaption(c, d); // ← NEW: renders one, some, or all parties
+      cap = lawyerCaption(c, d);
       break;
     case "officer":
     case "employee":
@@ -228,7 +222,6 @@ function renderIntro(){
   if (!intro) return;
   intro.innerHTML = `<h2>Affidavit of ${full || ""}</h2><p class="mt-12">${parts.join(", ")}, ${oathText}</p>`;
 }
-
 
 /* ---------- Jurat (blank display; matches Form 4D options) ---------- */
 function juratHTMLBlank() {
@@ -329,7 +322,6 @@ function juratHTMLBlank() {
   `;
 }
 
-
 function renderJurat() {
   const c = document.getElementById("jurat");
   if (!c) return;
@@ -425,7 +417,6 @@ const SmartListExit = Extension.create({
         } else if (ch.type?.name === 'exhibitChip') {
           // neutral — chips don't make the item "non-empty"
         } else {
-          // any other inline node counts as content
           hasReal = true;
         }
       });
@@ -467,7 +458,7 @@ const SmartListExit = Extension.create({
         if (exitEmptyListItem(editor)) return true;
         return false;
       },
-      Delete: ({ editor }) => {
+      Delete: ({ editor }) => {   // quoted or unquoted both OK
         if (exitEmptyListItem(editor)) return true;
         return false;
       },
@@ -725,9 +716,9 @@ function renderRow(p,total,labels){
       const chip=elx("div",{className:"exhibit-chip rail-chip"});
       chip.dataset.exId = ex.id;
 
-      const label=labels.get(ex.id)||""; 
-      const L=elx("span",{className:"pill exhibit-label",innerText:`exhibit "${label}"`,title:"Edit exhibit details"});
-      const N=elx("span",{className:"exhibit-name",innerText:`• ${ex.name||"Exhibit"}`,title:"Edit exhibit details"});
+      const label = labels.get(ex.id) || "";
+      const L = elx("span",{className:"pill exhibit-label", innerText: `exhibit "${label}"`, title:"Edit exhibit details"});
+      const N = elx("span",{className:"exhibit-name", innerText: `• ${ex.name||"Exhibit"}`, title:"Edit exhibit details"});
       const open=()=>openDocMetaForFile(ex.fileId);
       L.classList.add("clickable"); N.classList.add("clickable");
       L.tabIndex=0; N.tabIndex=0;

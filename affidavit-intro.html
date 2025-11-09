@@ -1,33 +1,25 @@
-<!--
-  affidavit-intro.html — Deponent Introductory Clause Inputs
-  ---------------------------------------------------------------------------
-  Purpose:
-    • Collect deponent identity/location + capacity (party, officer/employee, or lawyer) and oath type.
-    • Persists data in localStorage (keys: "jf_case" and "jf_oathType") for use on the next page.
-    • On submit → navigates to affidavit-body.html (wired by affidavit-intro.js).
-
-  Behavior:
-    • Conditional sections (role detail, affiliation, and lawyer selection) are toggled by affidavit-intro.js.
-    • Party <select> options are populated from jf_case.plaintiffs/defendants captured on index.html.
--->
+<!-- affidavit-intro.html — Deponent Introductory Clause Inputs (checklist UX) -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Information Required for Affidavit Introductory Clause</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    .choice-grid { display:grid; gap:6px; margin-top:6px; }
+    .choice-grid.cols-2 { grid-template-columns: repeat(2,minmax(180px,1fr)); }
+    .hint { font-size: 0.92em; color:#444; margin:4px 0 0; }
+    .mt-8{margin-top:8px}.mt-12{margin-top:12px}.ml-6{margin-left:12px}
+  </style>
 </head>
 <body>
   <main>
     <section>
       <h1>Information Required for Affidavit Introductory Clause</h1>
       <p class="form-preamble">
-        In Ontario, Affidavit Form 4A begins with a standardized <strong>introductory clause</strong>.
-        This section provides the court with important details about you, the <em>deponent</em> (the person swearing or affirming the affidavit).
-        The information you enter here will be used to complete that introductory clause. Please provide the following details:
+        This page collects details for the introductory clause of your affidavit (Form 4A).
       </p>
 
-      <!-- Form is validated and stored by affidavit-intro.js -->
       <form>
         <!-- Your Name and Location -->
         <fieldset>
@@ -49,94 +41,83 @@
           <input type="text" id="deponent-province" name="deponent-province" placeholder="e.g. Ontario">
         </fieldset>
 
-        <!-- Role selection drives conditional UI below (officer/employee vs lawyer) -->
+        <!-- Role selection drives conditional UI below -->
         <fieldset>
           <legend>My Role in this Case</legend>
 
           <input type="radio" id="role-plaintiff" name="role" value="plaintiff" required>
-          <label for="role-plaintiff">I am the Plaintiff (the person bringing the case)</label>
+          <label for="role-plaintiff">I am the Plaintiff</label>
           <br>
 
           <input type="radio" id="role-defendant" name="role" value="defendant">
-          <label for="role-defendant">I am the Defendant (the person responding to the case)</label>
+          <label for="role-defendant">I am the Defendant</label>
           <br>
 
           <input type="radio" id="role-lawyer" name="role" value="lawyer">
-          <label for="role-lawyer">I am the Lawyer for a party</label>
+          <label for="role-lawyer">I am the Lawyer for party/parties</label>
           <br>
 
           <input type="radio" id="role-officer" name="role" value="officer">
-          <label for="role-officer">I am a Director/Officer of a company involved in the case</label>
+          <label for="role-officer">I am a Director/Officer of a company in the case</label>
           <br>
 
           <input type="radio" id="role-employee" name="role" value="employee">
-          <label for="role-employee">I am an Employee of a company involved in the case</label>
+          <label for="role-employee">I am an Employee of a company in the case</label>
+          <br>
 
-          <!-- Role/title text field (only for officer/employee; required when visible) -->
-          <div id="role-detail-box" style="display:none; margin-top:8px">
-            <label for="role-detail">If officer or employee, state your role/title:</label>
+          <input type="radio" id="role-witness" name="role" value="witness">
+          <label for="role-witness">I am a Non-party Witness</label>
+
+          <!-- Self as specific party (plaintiff/defendant) -->
+          <div id="self-party-box" style="display:none" class="mt-12">
+            <p class="form-instruction">Select which specific party you are.</p>
+            <div id="self-party-list" class="choice-grid cols-2" role="radiogroup" aria-label="Select your party"></div>
+          </div>
+
+          <!-- Officer/Employee role + affiliation -->
+          <div id="role-detail-box" style="display:none" class="mt-12">
+            <label for="role-detail">Your role/title (e.g., Director, Manager):</label>
             <input type="text" id="role-detail" name="role-detail" placeholder="e.g. Director of Finance">
           </div>
 
-          <!-- Officer/Employee affiliation (choose side, then specific party; required when visible) -->
-          <div id="affiliation-box" style="display:none; margin-top:12px">
-            <p class="form-instruction">Select which party you are an officer/employee of.</p>
+          <div id="affiliation-box" style="display:none" class="mt-12">
+            <p class="form-instruction">Select which side and organization you work for.</p>
+            <label><input type="radio" name="aff-side" id="aff-side-plaintiff" value="plaintiff"> Plaintiff(s)</label>
+            <label class="ml-6"><input type="radio" name="aff-side" id="aff-side-defendant" value="defendant"> Defendant(s)</label>
+            <div id="affiliation-party-list" class="choice-grid cols-2 mt-8" role="radiogroup" aria-label="Select organization"></div>
+          </div>
 
-            <label>
-              <input type="radio" name="aff-side" id="aff-side-plaintiff" value="plaintiff">
-              Plaintiff(s)
-            </label>
-            <label class="ml-6">
-              <input type="radio" name="aff-side" id="aff-side-defendant" value="defendant">
-              Defendant(s)
-            </label>
-
-            <div class="mt-12">
-              <label for="affiliation-party">Party:</label>
-              <!-- Options populated from jf_case.[plaintiffs|defendants] by affidavit-intro.js -->
-              <select id="affiliation-party" name="affiliation-party">
-                <option value="">— Select party —</option>
-              </select>
+          <!-- Lawyer affiliation (multi-select) -->
+          <div id="lawyer-box" style="display:none" class="mt-12">
+            <p class="form-instruction">Select which side and the party/parties you represent.</p>
+            <label><input type="radio" name="law-side" id="law-side-plaintiff" value="plaintiff"> Plaintiff(s)</label>
+            <label class="ml-6"><input type="radio" name="law-side" id="law-side-defendant" value="defendant"> Defendant(s)</label>
+            <div class="mt-8">
+              <label><input type="checkbox" id="lawyer-all"> <strong>Select All</strong> (<span id="lawyer-all-label">All Plaintiffs</span>)</label>
+              <div id="lawyer-party-list" class="choice-grid cols-2 mt-8" aria-label="Select represented parties"></div>
             </div>
           </div>
 
-          <!-- Lawyer affiliation (choose side, then specific party; required when visible) -->
-          <div id="lawyer-box" style="display:none; margin-top:12px">
-            <p class="form-instruction">Select which party you are the lawyer for.</p>
-
-            <label>
-              <input type="radio" name="law-side" id="law-side-plaintiff" value="plaintiff">
-              Plaintiff(s)
-            </label>
-            <label class="ml-6">
-              <input type="radio" name="law-side" id="law-side-defendant" value="defendant">
-              Defendant(s)
-            </label>
-
-            <div class="mt-12">
-              <label for="lawyer-party">Party:</label>
-              <!-- Options populated from jf_case.[plaintiffs|defendants] by affidavit-intro.js -->
-              <select id="lawyer-party" name="lawyer-party">
-                <option value="">— Select party —</option>
-              </select>
+          <!-- Witness affiliation (multi-select) -->
+          <div id="witness-box" style="display:none" class="mt-12">
+            <p class="form-instruction">Select which side and the party/parties your evidence supports.</p>
+            <label><input type="radio" name="wit-side" id="wit-side-plaintiff" value="plaintiff"> Plaintiff(s)</label>
+            <label class="ml-6"><input type="radio" name="wit-side" id="wit-side-defendant" value="defendant"> Defendant(s)</label>
+            <div class="mt-8">
+              <label><input type="checkbox" id="witness-all"> <strong>Select All</strong> (<span id="witness-all-label">All Plaintiffs</span>)</label>
+              <div id="witness-party-list" class="choice-grid cols-2 mt-8" aria-label="Select supported parties"></div>
             </div>
           </div>
         </fieldset>
 
-        <!-- Oath / Affirmation selection (saved to "jf_oathType") -->
-        <p>
-          Ontario affidavits require you to choose either an oath or an affirmation. Swearing an oath is a religious
-          form; affirming is a non-religious form. Both have the same legal effect.
-        </p>
+        <!-- Oath / Affirmation -->
+        <p>Choose whether you will swear an oath (religious) or affirm (non-religious). Both have the same legal effect.</p>
         <fieldset>
           <legend>Swear or Affirm</legend>
-
           <input type="radio" id="swear" name="oath" value="swear" required>
-          <label for="swear">I will swear an oath (religious)</label>
-          <br>
-
+          <label for="swear">I will swear an oath</label><br>
           <input type="radio" id="affirm" name="oath" value="affirm">
-          <label for="affirm">I will affirm (non-religious)</label>
+          <label for="affirm">I will affirm</label>
         </fieldset>
 
         <button type="submit">Submit</button>
@@ -144,7 +125,6 @@
     </section>
   </main>
 
-  <!-- Wires conditional UI, validation, storage, and navigation to the next step -->
   <script src="affidavit-intro.js"></script>
 </body>
 </html>

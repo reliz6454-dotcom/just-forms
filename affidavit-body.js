@@ -575,6 +575,18 @@ function persistEditorState(pId) {
   const runs = runsFromDoc(ed.getJSON());
   upsertParagraph({ id: pId, html, runs });
 }
+function purgeChipNodesInEditor(pId, exId){
+  const ed = EDITORS.get(pId);
+  if (!ed) return;
+  const wrap = document.createElement("div");
+  wrap.innerHTML = ed.getHTML();
+  const sel = `.exh-chip[data-ex-id="${exId}"]`;
+  let changed = false;
+  wrap.querySelectorAll(sel).forEach(n => { n.remove(); changed = true; });
+  if (changed) {
+    ed.commands.setContent(wrap.innerHTML, false);
+  }
+}
 
 /* ---------- Add/Move/Remove exhibits (model + live editor) ---------- */
 function addExhibits(pId, entries){
@@ -636,23 +648,34 @@ function moveExhibit(pId, exId, dir){
 }
 
 function removeExhibit(pId, exId) {
-  // Note: this *unlinks* the exhibit from the paragraph only.
-  // The underlying IndexedDB file record is preserved.
+  // 1) Update storage model first
   histPush();
   const list = loadParas().sort(byNo);
   const i = list.findIndex(pp => pp.id === pId);
   if (i === -1) return;
+
   const p = ensureRuns(list[i]);
   p.exhibits = (p.exhibits || []).filter(x => x.id !== exId);
   p.runs     = (p.runs || []).filter(r => !(r.type === "exhibit" && r.exId === exId));
   saveParas(renumber(list));
 
-  const ed = EDITORS.get(pId);
-  if (ed) ed.commands.removeExhibitChip(exId);
-  persistEditorState(pId);
-  // Keep stored HTML + all live editors in sync
-  relabelAllChips();
-  refreshAllEditorChipLabels();
+  // 2) Remove the live TipTap chip; never let an exception skip the refresh
+  try {
+    const ed = EDITORS.get(pId);
+    if (ed) {
+      ed.commands.removeExhibitChip(exId); // sets allowChipRemoval meta
+      purgeChipNodesInEditor(pId, exId);   // scrub any left-over span
+      persistEditorState(pId);
+    }
+  } catch (_) {
+    // ignore; we still want to refresh globally
+  }
+
+  // 3) Defer global rebuild to the next microtask so the PM transaction settles
+  //    (prevents stale labels / rail not updating)
+  queueMicrotask(() => {
+    renderParagraphs();   // rebuild rows/rails + recompute labels + relabel chips
+  });
 }
 
 /* ---------- Affidavit linkage ---------- */
@@ -789,13 +812,24 @@ function renderRow(p,total,labels){
   file.hidden=true; strip.append(addBtn,file); mid.append(strip);
 
   function renderRail(){
+    // Recompute fresh labels and latest paragraph snapshot each time
+    const freshList = loadParas().sort(byNo).map(ensureRuns);
+    const labelsNow = computeLabels(freshList);
+    const latestP = freshList.find(x => x.id === p.id);
+    if (latestP) {
+      // Keep this row's p.exhibits in sync with storage (post add/move/remove)
+      p.exhibits = [...(latestP.exhibits || [])];
+    }
+
+    // Clear existing rail chips
     [...strip.querySelectorAll(".rail-chip")].forEach(n=>n.remove());
+
+    // Rebuild rail with up-to-date labels (rail label intentionally without parentheses)
     (p.exhibits||[]).forEach((ex,idx)=>{
       const chip=elx("div",{className:"exhibit-chip rail-chip"});
       chip.dataset.exId = ex.id;
 
-      const label = labels.get(ex.id) || "";
-      // NOTE: Rail label unchanged (no parentheses), per request.
+      const label = labelsNow.get(ex.id) || "";
       const L = elx("span",{className:"pill exhibit-label", innerText: `exhibit "${label}"`, title:"Edit exhibit details"});
       const N = elx("span",{className:"exhibit-name", innerText: `• ${ex.name||"Exhibit"}`, title:"Edit exhibit details"});
       const open=()=>openDocMetaForFile(ex.fileId);
@@ -809,20 +843,23 @@ function renderRow(p,total,labels){
       const leftBtn=elx("button",{type:"button",className:"ex-left",innerText:"←",title:"Move exhibit left"});
       const rightBtn=elx("button",{type:"button",className:"ex-right",innerText:"→",title:"Move exhibit right"});
       const editBtn=elx("button",{type:"button",className:"ex-edit",innerText:"Edit",title:"Edit description/date/type"});
-      const removeBtn=elx("button",{type:"button",className:"ex-remove",innerText:"Remove",title:"Remove exhibit from this paragraph"}); // NEW
+      const removeBtn=elx("button",{type:"button",className:"ex-remove",innerText:"Remove",title:"Remove exhibit from this paragraph"});
 
       if(idx===0) leftBtn.disabled=true; if(idx===(p.exhibits.length-1)) rightBtn.disabled=true;
       leftBtn.onclick=()=>{moveExhibit(p.id,ex.id,-1); renderParagraphs();};
       rightBtn.onclick=()=>{moveExhibit(p.id,ex.id,+1); renderParagraphs();};
       editBtn.onclick=open;
 
-      // Removal does NOT delete the file record; only unlinks from this paragraph and removes the chip.
-      removeBtn.onclick=()=>{
-        const ok = confirm("Remove this exhibit from this paragraph? The underlying file will remain available.");
-        if(!ok) return;
-        removeExhibit(p.id, ex.id);
-        renderParagraphs(); // rebuild UI & relabel chips globally
-      };
+      // Optimistic remove: rail chip disappears immediately, then sync
+removeBtn.onclick = () => {
+  const ok = confirm("Remove this exhibit from this paragraph? The underlying file will remain available.");
+  if (!ok) return;
+  // No optimistic DOM changes, no disabling — let removeExhibit() own the flow
+  removeExhibit(p.id, ex.id);
+};
+
+
+
 
       actions.append(leftBtn,rightBtn,editBtn,removeBtn);
       chip.append(L,N,actions); strip.insertBefore(chip,addBtn);

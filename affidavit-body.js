@@ -96,9 +96,9 @@ function relabelParagraphHTML(p, labels) {
   let changed = false;
 
   div.querySelectorAll('.exh-chip[data-ex-id]').forEach(n => {
-    const id = n.getAttribute('data-ex-id') || '';
+    const id = n.getAttribute("data-ex-id") || '';
     const lab = labels.get(id) || '?';
-    const newText = `exhibit "${lab}"`;
+    const newText = `(exhibit "${lab}")`;
     if (n.textContent !== newText) {
       n.textContent = newText;
       changed = true;
@@ -114,6 +114,25 @@ function relabelAllChips() {
   let changed = false;
   for (const p of list) changed = relabelParagraphHTML(p, labels) || changed;
   if (changed) saveParas(list);
+}
+
+/* ---------- live editor chip relabel (global refresh) ---------- */
+function refreshAllEditorChipLabels() {
+  const list = loadParas().sort(byNo).map(ensureRuns);
+  const labels = computeLabels(list);
+  for (const [, ed] of EDITORS) {
+    try {
+      const div = document.createElement("div");
+      div.innerHTML = ed.getHTML();
+      div.querySelectorAll('.exh-chip[data-ex-id]').forEach(n => {
+        const id = n.getAttribute('data-ex-id') || '';
+        const lab = labels.get(id) || '?';
+        const next = `(exhibit "${lab}")`;
+        if (n.textContent !== next) n.textContent = next;
+      });
+      ed.commands.setContent(div.innerHTML, false);
+    } catch {}
+  }
 }
 
 /* ---------- Heading & intro ---------- */
@@ -347,14 +366,15 @@ const ExhibitChip = Node.create({
       tag: 'span.exh-chip[data-ex-id]',
       getAttrs: el => ({
         exId: el.getAttribute("data-ex-id") || "",
-        label: (el.textContent || "").replace(/^exhibit\s+"?(.+?)"?$/i, "$1") || "?"
+        // Accept both '(exhibit "X")' and 'exhibit "X"' just in case old content exists
+        label: (el.textContent || "").replace(/^\(?\s*exhibit\s+"?(.+?)"?\s*\)?$/i, "$1") || "?"
       }),
     }];
   },
 
   renderHTML({ HTMLAttributes }) {
     const { exId, label } = HTMLAttributes;
-    return ["span", { class: "exh-chip", "data-ex-id": exId, contenteditable: "false" }, `exhibit "${label}"`];
+    return ["span", { class: "exh-chip", "data-ex-id": exId, contenteditable: "false" }, `(exhibit "${label}")`];
   },
 
   addCommands() {
@@ -458,7 +478,7 @@ const SmartListExit = Extension.create({
         if (exitEmptyListItem(editor)) return true;
         return false;
       },
-      Delete: ({ editor }) => {   // quoted or unquoted both OK
+      Delete: ({ editor }) => {
         if (exitEmptyListItem(editor)) return true;
         return false;
       },
@@ -492,7 +512,7 @@ function createEditor(mount, p, labels){
           if(r.type==="exhibit"){
             const span=document.createElement("span");
             span.className="exh-chip"; span.setAttribute("data-ex-id", r.exId); span.setAttribute("contenteditable","false");
-            span.textContent=`exhibit "${labels.get(r.exId)||"?"}"`;
+            span.textContent=`(exhibit "${labels.get(r.exId)||"?"}")`;
             para.append(document.createTextNode("\u200B"), span, document.createTextNode("\u200B"));
           }
         });
@@ -523,6 +543,39 @@ function createEditor(mount, p, labels){
   return editor;
 }
 
+/* ---------- Helper: swap two chip DOM nodes inside an editor ---------- */
+function swapChipNodesInEditor(pId, idA, idB){
+  const ed = EDITORS.get(pId);
+  if(!ed) return;
+  const wrap = document.createElement("div");
+  wrap.innerHTML = ed.getHTML();
+
+  const a = wrap.querySelector(`.exh-chip[data-ex-id="${idA}"]`);
+  const b = wrap.querySelector(`.exh-chip[data-ex-id="${idB}"]`);
+  if(!(a && b)){
+    // Even if not found (e.g., chip absent), still reapply to avoid losing edits
+    ed.commands.setContent(wrap.innerHTML, false);
+    return;
+  }
+
+  const aParent = a.parentNode, bParent = b.parentNode;
+  const aNext = a.nextSibling, bNext = b.nextSibling;
+
+  // Insert a where b was, and b where a was
+  bParent.insertBefore(a, bNext);
+  aParent.insertBefore(b, aNext);
+
+  ed.commands.setContent(wrap.innerHTML, false);
+}
+// ↓ Add this helper (place above moveExhibit/removeExhibit)
+function persistEditorState(pId) {
+  const ed = EDITORS.get(pId);
+  if (!ed) return;
+  const html = ed.getHTML();
+  const runs = runsFromDoc(ed.getJSON());
+  upsertParagraph({ id: pId, html, runs });
+}
+
 /* ---------- Add/Move/Remove exhibits (model + live editor) ---------- */
 function addExhibits(pId, entries){
   histPush();
@@ -541,7 +594,12 @@ function addExhibits(pId, entries){
   const labels=computeLabels(loadParas());
   const ed=EDITORS.get(pId);
   if(ed){ for(const exId of newIds){ ed.commands.insertExhibitChip({ exId, label: labels.get(exId)||"?" }); } }
+
+  // Keep stored HTML + all live editors in sync
+  relabelAllChips();
+  refreshAllEditorChipLabels();
 }
+
 function moveExhibit(pId, exId, dir){
   histPush();
   const list=loadParas().sort(byNo);
@@ -549,9 +607,18 @@ function moveExhibit(pId, exId, dir){
   const p=ensureRuns(list[i]); const ex=p.exhibits||[]; const idx=ex.findIndex(x=>x.id===exId);
   if(idx<0) { saveParas(renumber(list)); return; }
   const j=idx+dir; if(j<0||j>=ex.length){ saveParas(renumber(list)); return; }
+
+  // capture neighbor BEFORE swap so we can swap the inline chips to match
+  const neighborId = ex[j].id;
+
+  // swap in the model (rail order)
   [ex[idx], ex[j]]=[ex[j], ex[idx]];
   saveParas(renumber(list));
 
+  // swap inline chip DOM nodes to match the new order
+  swapChipNodesInEditor(pId, exId, neighborId);
+
+  // relabel everywhere to reflect global sequence
   const labels=computeLabels(loadParas());
   const ed=EDITORS.get(pId);
   if(ed){
@@ -559,12 +626,18 @@ function moveExhibit(pId, exId, dir){
     el.innerHTML=ed.getHTML();
     el.querySelectorAll(".exh-chip").forEach(n=>{
       const id=n.getAttribute("data-ex-id");
-      n.textContent=`exhibit "${labels.get(id)||"?"}"`;
+      n.textContent=`(exhibit "${labels.get(id)||"?"}")`;
     });
     ed.commands.setContent(el.innerHTML, false);
   }
+  persistEditorState(pId);
+  relabelAllChips();
+  refreshAllEditorChipLabels();
 }
+
 function removeExhibit(pId, exId) {
+  // Note: this *unlinks* the exhibit from the paragraph only.
+  // The underlying IndexedDB file record is preserved.
   histPush();
   const list = loadParas().sort(byNo);
   const i = list.findIndex(pp => pp.id === pId);
@@ -573,8 +646,13 @@ function removeExhibit(pId, exId) {
   p.exhibits = (p.exhibits || []).filter(x => x.id !== exId);
   p.runs     = (p.runs || []).filter(r => !(r.type === "exhibit" && r.exId === exId));
   saveParas(renumber(list));
+
   const ed = EDITORS.get(pId);
   if (ed) ed.commands.removeExhibitChip(exId);
+  persistEditorState(pId);
+  // Keep stored HTML + all live editors in sync
+  relabelAllChips();
+  refreshAllEditorChipLabels();
 }
 
 /* ---------- Affidavit linkage ---------- */
@@ -717,6 +795,7 @@ function renderRow(p,total,labels){
       chip.dataset.exId = ex.id;
 
       const label = labels.get(ex.id) || "";
+      // NOTE: Rail label unchanged (no parentheses), per request.
       const L = elx("span",{className:"pill exhibit-label", innerText: `exhibit "${label}"`, title:"Edit exhibit details"});
       const N = elx("span",{className:"exhibit-name", innerText: `• ${ex.name||"Exhibit"}`, title:"Edit exhibit details"});
       const open=()=>openDocMetaForFile(ex.fileId);
@@ -730,12 +809,22 @@ function renderRow(p,total,labels){
       const leftBtn=elx("button",{type:"button",className:"ex-left",innerText:"←",title:"Move exhibit left"});
       const rightBtn=elx("button",{type:"button",className:"ex-right",innerText:"→",title:"Move exhibit right"});
       const editBtn=elx("button",{type:"button",className:"ex-edit",innerText:"Edit",title:"Edit description/date/type"});
+      const removeBtn=elx("button",{type:"button",className:"ex-remove",innerText:"Remove",title:"Remove exhibit from this paragraph"}); // NEW
+
       if(idx===0) leftBtn.disabled=true; if(idx===(p.exhibits.length-1)) rightBtn.disabled=true;
       leftBtn.onclick=()=>{moveExhibit(p.id,ex.id,-1); renderParagraphs();};
       rightBtn.onclick=()=>{moveExhibit(p.id,ex.id,+1); renderParagraphs();};
       editBtn.onclick=open;
-      actions.append(leftBtn,rightBtn,editBtn);
 
+      // Removal does NOT delete the file record; only unlinks from this paragraph and removes the chip.
+      removeBtn.onclick=()=>{
+        const ok = confirm("Remove this exhibit from this paragraph? The underlying file will remain available.");
+        if(!ok) return;
+        removeExhibit(p.id, ex.id);
+        renderParagraphs(); // rebuild UI & relabel chips globally
+      };
+
+      actions.append(leftBtn,rightBtn,editBtn,removeBtn);
       chip.append(L,N,actions); strip.insertBefore(chip,addBtn);
     });
   }
@@ -779,6 +868,9 @@ function renderRow(p,total,labels){
 function renderParagraphs(){
   const container=$("#paraList"); if(!container) return;
 
+  // Make sure saved HTML chip text reflects current global labels before we rebuild editors
+  relabelAllChips();
+
   for (const [,ed] of EDITORS){ try{ed.destroy();}catch{} }
   EDITORS.clear();
 
@@ -787,6 +879,9 @@ function renderParagraphs(){
 
   container.innerHTML="";
   list.forEach(p=> container.appendChild(renderRow(p, list.length, labels)));
+
+  // After rebuild, ensure all open editors show the current labels
+  refreshAllEditorChipLabels();
 }
 
 /* ---------- Init ---------- */
@@ -803,6 +898,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
       setExhibitScheme(s); 
       if(textEl) textEl.textContent=toggle.checked?"Numbers":"Letters";
       relabelAllChips();
+      refreshAllEditorChipLabels();
       renderParagraphs(); 
     });
   }

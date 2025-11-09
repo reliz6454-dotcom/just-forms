@@ -28,8 +28,8 @@ function lawyerDisplay(l) {
   if (lic)  bits.push(`#${lic}`);
   return bits.join(" • ");
 }
+
 function lawyerKey(l) {
-  // de-dupe by licence if present, else by name+firm (case-insensitive)
   const lic = (l.license || "").trim().toLowerCase();
   if (lic) return `lic:${lic}`;
   const name = `${(l.first||"").trim().toLowerCase()}|${(l.last||"").trim().toLowerCase()}`;
@@ -43,12 +43,10 @@ function lawyerKey(l) {
 function readPartyNode(node, cls) {
   if (!node) return null;
 
-  // identity
   const first   = node.querySelector(`.${cls}-first`)?.value.trim()   || "";
   const last    = node.querySelector(`.${cls}-last`)?.value.trim()    || "";
   const company = node.querySelector(`.${cls}-company`)?.value.trim() || "";
 
-  // contact (required regardless of counsel)
   const addr1   = node.querySelector(`.${cls}-addr1`)?.value.trim()   || "";
   const addr2   = node.querySelector(`.${cls}-addr2`)?.value.trim()   || "";
   const city    = node.querySelector(`.${cls}-city`)?.value.trim()    || "";
@@ -57,7 +55,6 @@ function readPartyNode(node, cls) {
   const phone   = node.querySelector(`.${cls}-phone`)?.value.trim()   || "";
   const email   = node.querySelector(`.${cls}-email`)?.value.trim()   || "";
 
-  // representation
   const representedEl = node.querySelector(`.${cls}-represented`);
   const represented = !!(representedEl && representedEl.checked);
 
@@ -99,10 +96,6 @@ function readPartyNode(node, cls) {
 /* ---------------------------------------
    VALIDATION
 ----------------------------------------*/
-// Identity rule for a single block:
-// - If requiredStrict === true: enforce identity must be provided and valid.
-// - If requiredStrict === false: allow a completely blank identity row (user can leave unused rows). 
-//   But if any of first/last/company is filled, enforce the rule.
 function requireIdentity(node, cls, partyLabel, requiredStrict) {
   const first   = node.querySelector(`.${cls}-first`)?.value.trim()   || "";
   const last    = node.querySelector(`.${cls}-last`)?.value.trim()    || "";
@@ -114,7 +107,6 @@ function requireIdentity(node, cls, partyLabel, requiredStrict) {
   if (requiredStrict) {
     if (!valid) {
       alert(`${partyLabel}: Enter either BOTH First and Last Name OR the Company Legal Name.`);
-      // focus: prioritize first/last unless company filled
       if (!company) {
         if (!first) node.querySelector(`.${cls}-first`)?.focus();
         else if (!last) node.querySelector(`.${cls}-last`)?.focus();
@@ -127,7 +119,6 @@ function requireIdentity(node, cls, partyLabel, requiredStrict) {
     return true;
   }
 
-  // not strictly required (extra rows): blank is OK, partial is NOT
   if (!anyTyped) return true;
   if (valid) return true;
 
@@ -179,7 +170,6 @@ function requireLawyerIfRepresented(node, cls, partyLabel) {
     return true;
   }
 
-  // manual required fields
   const need = [
     [`.${cls}-law-first`,   "lawyer first name"],
     [`.${cls}-law-last`,    "lawyer last name"],
@@ -207,7 +197,6 @@ function requireLawyerIfRepresented(node, cls, partyLabel) {
    COLLECT/POPULATE REUSABLE LAWYERS
 ----------------------------------------*/
 function collectLawyers(sideCls) {
-  // sideCls: "pl" or "df"
   const rootSel = sideCls === "pl" ? "#plaintiff-information" : "#defendant-information";
   const firstSel = sideCls === "pl" ? ".party-first" : ".def-party-first";
   const extraSel = sideCls === "pl" ? "#extra-plaintiffs" : "#extra-defendants";
@@ -225,7 +214,6 @@ function collectLawyers(sideCls) {
     const represented = !!n.querySelector(`.${sideCls}-represented`)?.checked;
     if (!represented) continue;
 
-    // prefer manual fields if visible; otherwise read selected value
     const useExisting = !!n.querySelector(`.${sideCls}-use-existing-lawyer`)?.checked;
     let l = null;
     if (useExisting) {
@@ -271,7 +259,6 @@ function populateLawyerSelects(sideCls) {
 
   root.querySelectorAll(`.${sideCls}-lawyer-select`).forEach(sel => {
     const current = sel.value || "";
-    // rebuild options
     sel.innerHTML = `<option value="">— select —</option>`;
     lawyers.forEach(l => {
       const opt = document.createElement("option");
@@ -279,7 +266,6 @@ function populateLawyerSelects(sideCls) {
       opt.value = JSON.stringify(l);
       sel.appendChild(opt);
     });
-    // keep previous selection if still present
     if (current) {
       const found = Array.from(sel.options).some(o => o.value === current);
       if (found) sel.value = current;
@@ -295,24 +281,22 @@ function readPartyList(rootSelector, firstSelector, extraSelector, cls) {
   const root = document.querySelector(rootSelector);
   if (!root) return out;
 
-  // first block
   const firstNode = root.querySelector(firstSelector);
   if (firstNode) out.push(readPartyNode(firstNode, cls));
 
-  // extras
   const extraWrap = root.querySelector(extraSelector);
   if (extraWrap) {
     extraWrap.querySelectorAll(".party-block").forEach(row => out.push(readPartyNode(row, cls)));
   }
 
-  // keep rows that have a valid identity (company OR (first && last))
   return out.filter(p => p && ( (p.company && p.company.trim()) || ((p.first && p.first.trim()) && (p.last && p.last.trim())) ));
 }
 
 /* ---------------------------------------
-   MOTION UI + DYNAMIC ROWS + REUSE WIRING
+   MAIN DOMContentLoaded
 ----------------------------------------*/
 document.addEventListener("DOMContentLoaded", () => {
+  // ✅ FIRST AND ONLY declaration of "form"
   const form = document.querySelector("form");
   if (!form) return;
 
@@ -332,27 +316,8 @@ document.addEventListener("DOMContentLoaded", () => {
   [motionYes, motionNo].forEach(r => r && r.addEventListener("change", syncMotionUI));
   syncMotionUI();
 
-  // Prefill from storage motion-only
-  try {
-    const existing = JSON.parse(localStorage.getItem(LS_CASE_KEY) || "null");
-    const m = existing?.motion;
-    if (m) {
-      if (m.isMotion) {
-        if (motionYes) motionYes.checked = true;
-        if (motionNo)  motionNo.checked = false;
-        const mp = document.getElementById("moving-plaintiff");
-        const md = document.getElementById("moving-defendant");
-        if (m.movingSide === "plaintiff" && mp) mp.checked = true;
-        if (m.movingSide === "defendant" && md) md.checked = true;
-      } else {
-        if (motionNo) motionNo.checked = true;
-      }
-      syncMotionUI();
-    }
-  } catch {}
-
   /* ---------------------------------------
-     Helpers to wire a party block (toggle, reuse UI, change listeners)
+     Helpers to wire representation
   ----------------------------------------*/
   function wireRepresentationBlock(block, cls){
     const cb = block.querySelector(`.${cls}-represented`);
@@ -393,11 +358,13 @@ document.addEventListener("DOMContentLoaded", () => {
     ].join(","));
     manualInputs.forEach(inp => inp.addEventListener("input", () => populateLawyerSelects(cls)));
 
-    // initial
     syncRepresented();
     syncReuse();
   }
 
+  /* ---------------------------------------
+     Build each party block dynamically
+  ----------------------------------------*/
   function wireSide(side){
     const isPl = side === "pl";
     const firstBlock = document.querySelector(isPl ? "#plaintiff-information .party-first" : "#defendant-information .def-party-first");
@@ -446,24 +413,23 @@ document.addEventListener("DOMContentLoaded", () => {
     updateButtons();
   }
 
-  // plaintiffs + defendants
   wireSide("pl");
   wireSide("df");
 
   /* ---------------------------------------
-     Submit → validate and save jf_case
+     ✅ Submit → validate and save jf_case
   ----------------------------------------*/
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     if (!form.reportValidity()) return;
 
-    // court info
-    const courtName = val("name-of-court");
-    const year      = val("court-file-year");
-    const assign    = val("court-file-assigned");
-    const suffix    = val("court-file-suffix");
+    const courtName  = val("name-of-court");
+    const commencedAt = val("proceeding-place"); // NEW
+    const year       = val("court-file-year");
+    const assign     = val("court-file-assigned");
+    const suffix     = val("court-file-suffix");
 
-    // Gather nodes per side for identity validation on ALL rows
+    // identity validation helpers
     function getSideNodes(rootSelector, firstSelector, extraSelector) {
       const root  = document.querySelector(rootSelector);
       const first = root?.querySelector(firstSelector) || null;
@@ -471,11 +437,8 @@ document.addEventListener("DOMContentLoaded", () => {
       return { first, extras };
     }
 
-    // Identity validation for all rows (strict on first, conditional on extras)
     const plNodes = getSideNodes("#plaintiff-information", ".party-first", "#extra-plaintiffs");
     const dfNodes = getSideNodes("#defendant-information", ".def-party-first", "#extra-defendants");
-
-    if (!plNodes.first || !dfNodes.first) return; // structural guard
 
     if (!requireIdentity(plNodes.first, "pl", "Plaintiff #1", true)) return;
     for (let i = 0; i < plNodes.extras.length; i++) {
@@ -486,7 +449,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!requireIdentity(dfNodes.extras[i], "df", `Defendant #${i+2}`, false)) return;
     }
 
-    // read lists (keeps only rows with valid identity)
     const plaintiffs = readPartyList("#plaintiff-information", ".party-first", "#extra-plaintiffs", "pl");
     const defendants = readPartyList("#defendant-information", ".def-party-first", "#extra-defendants", "df");
 
@@ -495,22 +457,18 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // require contact for every saved party; require lawyer fields if represented
     function checkSide(list, sideLabel, rootSelector, firstSelector, extraSelector, cls) {
       const root  = document.querySelector(rootSelector);
       const first = root.querySelector(firstSelector);
       const extras= root.querySelectorAll(`${extraSelector} .party-block`);
 
-      // Build a parallel list of nodes that correspond only to kept parties
-      // Strategy: walk nodes in order, and include those whose identity is valid
       const nodesInOrder = [first, ...extras];
       const nodesKept = [];
       for (const n of nodesInOrder) {
         const f = n.querySelector(`.${cls}-first`)?.value.trim() || "";
         const l = n.querySelector(`.${cls}-last`)?.value.trim() || "";
         const c = n.querySelector(`.${cls}-company`)?.value.trim() || "";
-        const keep = !!(c || (f && l));
-        if (keep) nodesKept.push(n);
+        if (c || (f && l)) nodesKept.push(n);
       }
 
       for (let i = 0; i < list.length; i++) {
@@ -526,7 +484,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!checkSide(plaintiffs, "Plaintiff", "#plaintiff-information", ".party-first", "#extra-plaintiffs", "pl")) return;
     if (!checkSide(defendants, "Defendant", "#defendant-information", ".def-party-first", "#extra-defendants", "df")) return;
 
-    // motion
     const isMotion = radioChecked("motion-yes");
     let movingSide = null;
     if (isMotion) {
@@ -540,9 +497,9 @@ document.addEventListener("DOMContentLoaded", () => {
       movingSide = mp ? "plaintiff" : "defendant";
     }
 
-    // save jf_case
     const caseData = {
       courtName,
+      commencedAt, // NEW
       courtFile: { year, assign, suffix },
       plaintiffs,
       defendants,
@@ -557,7 +514,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // next step
     window.location.href = "affidavit-intro.html";
   });
 });

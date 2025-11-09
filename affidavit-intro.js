@@ -219,11 +219,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const boxes = Array.from(document.querySelectorAll(`input[name="${nameAttr}"]`));
     boxes.forEach(b => b.checked = master.checked);
   }
-  function reflectMasterFromChildren(master, nameAttr) {
-    const boxes = Array.from(document.querySelectorAll(`input[name="${nameAttr}"]`));
-    const allOn = boxes.length > 0 && boxes.every(b => b.checked);
-    master.checked = allOn;
-  }
+ function reflectMasterFromChildren(master, nameAttr) {
+  const boxes = Array.from(document.querySelectorAll(`input[name="${nameAttr}"]`));
+  const allOn = boxes.length > 1 && boxes.every(b => b.checked); // only auto-check if there are 2+ boxes
+  master.checked = allOn;
+}
+
 
   lawyerAll.addEventListener("change", () => syncAllCheckbox(lawyerAll, "law-party"));
   witnessAll.addEventListener("change", () => syncAllCheckbox(witnessAll, "wit-party"));

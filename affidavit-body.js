@@ -121,6 +121,39 @@ function relabelAllChips() {
 function partyName(p){ if(!p)return""; const co=(p.company||"").trim(); const person=[p.first||"",p.last||""].map(s=>s.trim()).filter(Boolean).join(" ").trim(); return co||person||""; }
 const listNames=(arr)=> (Array.isArray(arr)?arr:[]).map(partyName).filter(Boolean);
 function etAl(names,limit=3){ return names.length<=limit?names.join(", "):names.slice(0,limit).join(", ")+", et al."; }
+function joinAnd(arr){
+  if (!Array.isArray(arr) || arr.length === 0) return "";
+  if (arr.length === 1) return arr[0];
+  if (arr.length === 2) return `${arr[0]} and ${arr[1]}`;
+  return `${arr.slice(0, -1).join(", ")}, and ${arr[arr.length - 1]}`;
+}
+
+function lawyerCaption(caseData, deponent){
+  const side = (deponent.lawyerSide || "").toLowerCase();
+  if (side !== "plaintiff" && side !== "defendant") return "the lawyer for a party";
+
+  const roleSingular = side === "plaintiff" ? "Plaintiff" : "Defendant";
+  const rolePlural   = side === "plaintiff" ? "Plaintiffs" : "Defendants";
+
+  // “All Plaintiffs/Defendants”
+  if (deponent.lawyerAllParties) {
+    return `the lawyer for the ${rolePlural}`;
+  }
+
+  const list = side === "plaintiff" ? (caseData.plaintiffs || []) : (caseData.defendants || []);
+  const names = (deponent.lawyerPartyIndexes || [])
+    .map(i => list[i])
+    .map(partyName)
+    .filter(Boolean);
+
+  if (names.length === 1) {
+    return `the lawyer for the ${roleSingular} ${names[0]}`;
+  }
+  if (names.length > 1) {
+    return `the lawyer for the ${rolePlural} ${joinAnd(names)}`;
+  }
+  return "the lawyer for a party";
+}
 function roleLabel(side,count,isMotion,movingSide){
   const isPl=side==="plaintiff"; const base=isPl?(count>1?"Plaintiffs":"Plaintiff"):(count>1?"Defendants":"Defendant");
   if(!isMotion) return base;
@@ -157,26 +190,45 @@ function renderHeading(){
     </div>`;
 }
 function renderIntro(){
-  const c=loadCase(); const d=c.deponent||{}; const oath=(loadOath()||"").toLowerCase();
+  const c = loadCase();
+  const d = c.deponent || {};
+  const oath = (loadOath() || "").toLowerCase();
+
   const nameOf = (p)=>[p?.first,p?.last].filter(Boolean).join(" ").trim();
-  const role=(d.role||"").toLowerCase();
-  let full=nameOf(d)|| (role==="plaintiff" && c.plaintiffs?.[0]? nameOf(c.plaintiffs[0]) : (role==="defendant" && c.defendants?.[0]? nameOf(c.defendants[0]) : ""));
-  const city = d.city?`of the City of ${d.city}`:"";
-  const prov = d.prov?`in the Province of ${d.prov}`:"";
-  let cap="";
-  switch(role){
+  const role = (d.role || "").toLowerCase();
+
+  let full = nameOf(d)
+    || (role==="plaintiff"  && c.plaintiffs?.[0] ? nameOf(c.plaintiffs[0])
+    :  (role==="defendant" && c.defendants?.[0] ? nameOf(c.defendants[0]) : ""));
+
+  const city = d.city ? `of the City of ${d.city}` : "";
+  const prov = d.prov ? `in the Province of ${d.prov}` : "";
+
+  let cap = "";
+  switch (role) {
     case "plaintiff":
-    case "defendant": cap=`the ${role}`; break;
-    case "lawyer": cap="the lawyer for a party"; break;
+    case "defendant":
+      cap = `the ${role}`;
+      break;
+    case "lawyer":
+      cap = lawyerCaption(c, d); // ← NEW: renders one, some, or all parties
+      break;
     case "officer":
-    case "employee": cap=d.roleDetail?`the ${d.roleDetail} of a party`:`an ${role} of a party`; break;
-    default: cap=d.role?`the ${d.role}`:"";
+    case "employee":
+      cap = d.roleDetail ? `the ${d.roleDetail} of a party` : `an ${role} of a party`;
+      break;
+    default:
+      cap = d.role ? `the ${d.role}` : "";
   }
-  const oathText = oath==="swear" ? "MAKE OATH AND SAY:" : "AFFIRM:";
-  const parts = [full?`I, ${full}`:"I,", city, prov, cap||null].filter(Boolean);
-  const intro=$("#intro"); if(!intro) return;
-  intro.innerHTML=`<h2>Affidavit of ${full||""}</h2><p class="mt-12">${parts.join(", ")}, ${oathText}</p>`;
+
+  const oathText = oath === "swear" ? "MAKE OATH AND SAY:" : "AFFIRM:";
+  const parts = [full ? `I, ${full}` : "I,", city, prov, cap || null].filter(Boolean);
+
+  const intro = document.getElementById("intro");
+  if (!intro) return;
+  intro.innerHTML = `<h2>Affidavit of ${full || ""}</h2><p class="mt-12">${parts.join(", ")}, ${oathText}</p>`;
 }
+
 
 /* ---------- Jurat (blank display; matches Form 4D options) ---------- */
 function juratHTMLBlank() {

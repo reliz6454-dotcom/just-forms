@@ -86,6 +86,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const form = document.querySelector("form");
   if (!form) return;
 
+  // Back button to mimic affidavit-body behavior
+const backBtn = document.getElementById("back");
+if (backBtn) backBtn.onclick = () => history.back();
+
+
   // Identity/location
   const first = document.getElementById("deponent-first-name");
   const last  = document.getElementById("deponent-last-name");

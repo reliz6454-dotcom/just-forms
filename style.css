@@ -370,3 +370,425 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
 #intro p {
   text-align: left; /* keep the body text left-aligned */
 }
+
+
+/* =========================
+   Form 4C Backsheet Preview
+   ========================= */
+.backsheet {
+  font-family: "Times New Roman", Times, serif;
+  max-width: 7.5in;
+  margin: 0 auto;
+  color: #111;
+}
+.backsheet .small { font-size: 0.9rem; color: #444; }
+.backsheet .italic { font-style: italic; }
+
+.backsheet .bs-top {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.backsheet .bs-center { text-align: center; }
+.backsheet .bs-form { font-weight: 700; }
+.backsheet .bs-act { font-style: italic; }
+.backsheet .bs-title { letter-spacing: .5px; }
+
+.backsheet .bs-rule {
+  border-bottom: 1px solid #000;
+  margin: 6px 0;
+}
+
+/* Two columns with vertical divider */
+.backsheet .bs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  position: relative;
+  min-height: 2.25in;
+}
+.backsheet .bs-grid::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0; bottom: 0;
+  width: 1px; background: #000;
+}
+.backsheet .bs-col-left { padding: 10px 14px 10px 0; }
+.backsheet .bs-col-right { padding: 10px 0 10px 14px; }
+
+.backsheet .bs-short {
+  font-style: italic;
+}
+
+.backsheet .bs-court {
+  text-align: right;
+  margin-bottom: 6px;
+  font-style: italic;
+}
+.backsheet .bs-where {
+  text-align: center;
+  margin: 10px 0 16px;
+}
+
+.backsheet .bs-field {
+  margin: 12px 0;
+}
+.backsheet .bs-label {
+  font-style: italic;
+  color: #444;
+  margin-bottom: 4px;
+}
+.backsheet .bs-value { }
+
+.backsheet .bs-name { font-weight: 600; }
+.backsheet .bs-license { margin-top: 4px; }
+
+.backsheet .bs-blankline {
+  border-bottom: 1px solid #000;
+  height: 1.1em;
+}
+
+/* File no. footer, right aligned under the grid */
+.backsheet .bs-file-no {
+  text-align: right;
+  margin-top: 10px;
+  font-weight: 600;
+}
+/* Top captions */
+.backsheet .bs-top {
+  display:flex; justify-content:space-between; align-items:flex-end;
+  font-size: 11px; margin-bottom: 6px;
+}
+.backsheet .bs-top .small { color:#333; }
+
+/* Headline row: short title left, file no. right */
+.backsheet .bs-headline {
+  display:flex; justify-content:space-between; align-items:flex-start;
+  font-size: 14px; font-style: italic; margin-bottom: 6px;
+}
+.backsheet .bs-headline .bs-short { padding-right: 12px; }
+.backsheet .bs-headline .bs-cfno { font-style: normal; }
+
+/* Divider under headline */
+.backsheet .bs-rule {
+  border-top: 1px solid #000; margin: 8px 0 12px 0;
+}
+
+/* Two-column grid with vertical divide (right column like example) */
+.backsheet .bs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  min-height: 360px;
+  position: relative;
+}
+.backsheet .bs-col-left {
+  padding-right: 12px;
+}
+.backsheet .bs-col-right {
+  padding-left: 24px;
+  border-left: 1px solid #000;
+}
+
+/* Court block (two lines) */
+.backsheet .bs-ontario {
+  font-variant: small-caps;
+  text-align: center;
+  margin-top: 4px;
+}
+.backsheet .bs-scj {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+/* Proceeding commenced at */
+.backsheet .bs-where { text-align: center; margin-bottom: 12px; }
+.backsheet .italic { font-style: italic; }
+
+/* Field blocks */
+.backsheet .bs-field { margin: 10px 0; }
+.backsheet .bs-label { font-size: 12px; color: #333; }
+.backsheet .bs-value { margin-top: 2px; }
+.backsheet .bs-name { font-weight: 600; margin-bottom: 2px; }
+.backsheet .bs-address, .backsheet .bs-contact, .backsheet .bs-license { margin-top: 2px; }
+.backsheet .bs-blankline { border-bottom: 1px solid #000; min-height: 18px; }
+
+/* Remove any old bottom court-file band if present */
+.backsheet .bs-file-no { display: none !important; }
+
+/* Remove old bracketed labels: no special styling needed */
+.backsheet .bs-headline {
+  display:flex;
+  justify-content:space-between;
+  font-size:14px;
+  margin-bottom:8px;
+  font-style: italic;
+}
+
+.backsheet .bs-short { padding-right:12px; }
+.backsheet .bs-cfno { font-style:normal; }
+
+.backsheet .bs-rule {
+  border-top:1px solid #000;
+  margin:10px 0 14px 0;
+}
+
+.backsheet .bs-grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  min-height:360px;
+}
+
+.backsheet .bs-col-left { }
+
+.backsheet .bs-col-right {
+  padding-left:24px;
+  border-left:1px solid #000;
+}
+
+.backsheet .bs-ontario {
+  font-variant: small-caps;
+  text-align:center;
+  margin-top:4px;
+}
+.backsheet .bs-scj {
+  text-align:center;
+  margin-bottom:12px;
+}
+.backsheet .bs-where {
+  text-align:center;
+  margin-bottom:18px;
+}
+
+.backsheet .bs-section {
+  margin:12px 0;
+}
+
+.backsheet .bs-title {
+  font-weight:bold;
+  margin-bottom:4px;
+}
+
+.backsheet .bs-name {
+  font-weight:bold;
+  margin-bottom:2px;
+}
+
+.backsheet .bs-address,
+.backsheet .bs-contact,
+.backsheet .bs-license { margin-top:3px; }
+
+.backsheet .bs-blankline {
+  border-bottom:1px solid #000;
+  height:20px;
+}
+/* ==== Form 4C backsheet layout ==== */
+
+.backsheet {
+  display: grid;
+  grid-template-rows: auto 1px 1fr;
+  gap: 0;
+}
+
+/* Parties header (side-by-side with '-and-') */
+.bs-parties {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  column-gap: 16px;
+  padding: 8px 0 6px 0;
+}
+
+.bs-party .bs-names {
+  font-variant: small-caps;
+  line-height: 1.2;
+}
+
+.bs-party .bs-role {
+  font-size: 0.95rem;
+  margin-top: 2px;
+}
+
+.bs-and {
+  text-align: center;
+  padding: 0 8px;
+}
+
+/* Full-width rule under the parties */
+.bs-rule {
+  border-top: 1px solid #000;
+  width: 100%;
+}
+
+/* Two-column body with vertical divider */
+.bs-body {
+  display: grid;
+  grid-template-columns: minmax(40%, 1fr) minmax(340px, 42%);
+  min-height: 260px;
+}
+
+.bs-blank {
+  /* intentionally empty — printable “left side” */
+  border-right: 2px solid #000;
+}
+
+/* Right card */
+.bs-card {
+  padding: 12px 18px 0 18px;
+  position: relative;
+  display: grid;
+  grid-auto-rows: max-content;
+  row-gap: 8px;
+}
+
+/* Court file number: top-right, keep within card */
+.bs-file {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Court + place */
+.bs-court {
+  text-align: center;
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.bs-where {
+  text-align: center;
+  margin-top: 2px;
+}
+
+/* Centered title + sworn line */
+.bs-title {
+  text-align: center;
+  font-weight: 700;
+  margin-top: 10px;
+}
+
+.bs-sworn {
+  text-align: center;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+/* Contact block (centered) */
+.bs-contact {
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.4;
+}
+
+.bs-contact-name {
+  font-weight: 600;
+}
+
+.bs-contact-addr {
+  margin-top: 2px;
+}
+
+.bs-contact-lines {
+  margin-top: 2px;
+}
+
+.bs-contact-license {
+  margin-top: 2px;
+}
+
+/* Keep long party names/file numbers from spilling */
+.bs-names,
+.bs-file {
+  overflow-wrap: anywhere;
+}
+/* === Form 4C backsheet layout === */
+.bs { position: relative; }
+
+/* Parties row at top */
+.bs-toprow {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  gap: 12px;
+  padding: 8px 0 6px;
+}
+.bs-side { text-align: left; }
+.bs-side-right { text-align: right; }
+.bs-and { text-align: center; font-style: italic; }
+.bs-names { font-variant: small-caps; letter-spacing: 0.02em; }
+.bs-role { font-size: 0.95em; }
+
+/* Rule under the parties */
+.bs-toprule {
+  border-top: 2px solid #000;
+  margin: 6px 0 0;
+}
+
+/* Two-column body: large blank slab + main column with a vertical midline */
+.bs-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 240px;
+}
+.bs-leftslab { /* intentionally blank */ }
+.bs-main {
+  border-left: 2px solid #000;  /* the vertical midline */
+  padding: 12px 18px 0 18px;
+  display: grid;
+  grid-auto-rows: min-content;
+  row-gap: 10px;
+}
+
+/* Court file number: top-right of the main column */
+.bs-filetop {
+  text-align: right;
+  font-size: 0.98em;
+}
+
+/* Centered court + headings */
+.bs-court { text-align: center; font-weight: 600; }
+.bs-commence { text-align: center; }
+
+/* Document title + sworn line centered and bold */
+.bs-doc-title { text-align: center; font-weight: 700; margin-top: 6px; }
+.bs-sworn { text-align: center; font-weight: 700; }
+
+/* Filer block centered */
+.bs-filer {
+  text-align: center;
+  margin-top: 6px;
+}
+.bs-filer-name { font-weight: 600; }
+.bs-filer-addr { margin-top: 2px; }
+.bs-filer-contact { margin-top: 2px; }
+.bs-filer-license { margin-top: 2px; }
+
+/* No bottom horizontal rule anywhere on the card */
+/* === Top file number (new) === */
+.bs-file-topline {
+  text-align: right;
+  font-weight: 600;
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+
+/* Keep existing styles for top row, roles, etc. */
+.bs-court {
+  text-align: center;
+  font-style: italic;
+  font-weight: normal;   /* removes bold */
+  margin-bottom: 4px;
+}
+.bs-file-topline {
+  text-align: right;
+  font-weight: normal;   /* remove bold */
+  font-style: normal;
+  margin-bottom: 4px;
+  white-space: nowrap;
+}

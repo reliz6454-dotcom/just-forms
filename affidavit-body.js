@@ -920,6 +920,224 @@ function renderParagraphs(){
   // After rebuild, ensure all open editors show the current labels
   refreshAllEditorChipLabels();
 }
+/* ---------- Form 4C backsheet helpers ---------- */
+
+// short title of proceeding: first plaintiff v first defendant
+function shortTitle(c = {}) {
+  const firstName = (p) => {
+    const co = (p?.company || "").trim();
+    const person = [p?.first || "", p?.last || ""].map(s => s.trim()).filter(Boolean).join(" ").trim();
+    return co || person || "";
+  };
+  const p1 = firstName((c.plaintiffs || [])[0]) || "Plaintiff";
+  const d1 = firstName((c.defendants || [])[0]) || "Defendant";
+  return `${p1} v. ${d1}`;
+}
+
+// choose filer block (name/contact to appear on the backsheet)
+// Logic: prefer the lawyer for the deponent’s party/side (if represented); otherwise that party’s own contact.
+// If the deponent is a witness, prefer the chosen side’s lawyer (first represented party) or that side’s first party contact.
+// If the deponent is a lawyer, use that lawyer (from the party records) if available.
+function pickFiler(c = {}, d = {}) {
+  const sideList = (side) => side === "plaintiff" ? (c.plaintiffs || []) : (c.defendants || []);
+  const lawyerOf = (party) => (party?.represented && party?.lawyer) ? party.lawyer : null;
+
+  // convenience: build display records with uniform shape
+  const makePartyRecord = (party) => ({
+    type: "party",
+    name:
+      (party?.company || "").trim() ||
+      [party?.first || "", party?.last || ""].map(s => s.trim()).filter(Boolean).join(" ").trim() ||
+      "Party",
+    addr1: party?.contact?.addr1 || "",
+    addr2: party?.contact?.addr2 || "",
+    city:  party?.contact?.city  || "",
+    prov:  party?.contact?.prov  || "",
+    postal:party?.contact?.postal|| "",
+    phone: party?.contact?.phone || "",
+    email: party?.contact?.email || "",
+    license: ""
+  });
+
+  const makeLawyerRecord = (law) => ({
+    type: "lawyer",
+    name: [law?.first || "", law?.last || ""].map(s => s.trim()).filter(Boolean).join(" ").trim() || "Lawyer",
+    firm: (law?.firm || "").trim(),
+    addr1: law?.addr1 || "",
+    addr2: law?.addr2 || "",
+    city:  law?.city  || "",
+    prov:  law?.prov  || "",
+    postal:law?.postal|| "",
+    phone: law?.phone || "",
+    email: law?.email || "",
+    license: (law?.license || "").trim()
+  });
+
+  const role = (d.role || "").toLowerCase();
+
+  const fallbackFirstSideLawyer = (side) => {
+    const list = sideList(side);
+    for (const p of list) {
+      const L = lawyerOf(p);
+      if (L) return makeLawyerRecord(L);
+    }
+    // fallback to first party’s own contact
+    if (list[0]) return makePartyRecord(list[0]);
+    return null;
+  };
+
+  if (role === "plaintiff" || role === "defendant") {
+    const side = role;
+    const idx = Number.isInteger(d.selfPartyIndex) ? d.selfPartyIndex : 0;
+    const list = sideList(side);
+    const party = list[idx] || list[0] || null;
+    if (party) {
+      const L = lawyerOf(party);
+      return L ? makeLawyerRecord(L) : makePartyRecord(party);
+    }
+    return fallbackFirstSideLawyer(side);
+  }
+
+  if (role === "officer" || role === "employee") {
+    const side = d.roleSide || null;
+    if (side != null && Number.isInteger(d.rolePartyIndex)) {
+      const list = sideList(side);
+      const party = list[d.rolePartyIndex] || list[0] || null;
+      if (party) {
+        const L = lawyerOf(party);
+        return L ? makeLawyerRecord(L) : makePartyRecord(party);
+      }
+      return fallbackFirstSideLawyer(side);
+    }
+    // If somehow not set, default to plaintiffs’ side
+    return fallbackFirstSideLawyer("plaintiff");
+  }
+
+  if (role === "lawyer") {
+    // Use any lawyer on the selected lawyerSide if present; otherwise fallback
+    const side = d.lawyerSide || null;
+    if (side) {
+      // try to find a party that is represented, and use its lawyer
+      const list = sideList(side);
+      for (const p of list) {
+        if (p?.represented && p?.lawyer) {
+          return makeLawyerRecord(p.lawyer);
+        }
+      }
+      // fallback to first party’s contact
+      if (list[0]) return makePartyRecord(list[0]);
+    }
+    return fallbackFirstSideLawyer("plaintiff");
+  }
+
+  if (role === "witness") {
+    const side = d.witnessSide || "plaintiff";
+    return fallbackFirstSideLawyer(side);
+  }
+
+  // default: plaintiffs’ side
+  return fallbackFirstSideLawyer("plaintiff");
+}
+
+
+
+
+function renderBacksheet() {
+  const c = loadCase();
+  const d = (c.deponent || {});
+  const where = (c.commencedAt || "").trim();
+  const court = (c.courtName || "ONTARIO SUPERIOR COURT OF JUSTICE").trim();
+  const fileNo = fmtFile(c.courtFile || {});
+  const isMotion = !!(c.motion && c.motion.isMotion);
+  const movingSide = c.motion ? c.motion.movingSide : null;
+
+  // Helper: name extraction + et al.
+  const namesList = (arr) => (Array.isArray(arr) ? arr : []).map(partyName).filter(Boolean);
+  const etAlName = (arr) => {
+    const names = namesList(arr);
+    if (names.length <= 1) return names[0] || "";
+    return `${names[0]}, et al.`;
+  };
+
+  const plNames = etAlName(c.plaintiffs || []);
+  const dfNames = etAlName(c.defendants || []);
+
+  const plRole = roleLabel("plaintiff", (c.plaintiffs || []).length || 1, isMotion, movingSide);
+  const dfRole = roleLabel("defendant", (c.defendants || []).length || 1, isMotion, movingSide);
+
+  const deponentFull = [d.first || "", d.last || ""]
+    .map(s => s.trim()).filter(Boolean).join(" ").trim();
+
+  const filer = pickFiler(c, d) || {
+    type: "party", name: "", firm: "", addr1: "", addr2: "",
+    city: "", prov: "", postal: "", phone: "", email: "", license: ""
+  };
+
+  const nameLine = filer.type === "lawyer"
+    ? [filer.name, filer.firm].filter(Boolean).join(", ")
+    : filer.name;
+
+  const addressBlock = [
+    [filer.addr1, filer.addr2].filter(Boolean).join(", "),
+    [filer.city, filer.prov, filer.postal].filter(Boolean).join(", ")
+  ].filter(Boolean).join("<br>");
+
+  const licenseLine =
+    filer.type === "lawyer" && filer.license ? `LSO No.: ${filer.license}` : "";
+
+  const el = document.getElementById("backsheet");
+  if (!el) return;
+
+  el.innerHTML = `
+    <div class="bs">
+
+      <!-- NEW: Court file number at the absolute top-right -->
+      <div class="bs-file-topline">Court File No.: ${fileNo || ""}</div>
+
+
+      <!-- Parties row -->
+      <div class="bs-toprow">
+        <div class="bs-side">
+          <div class="bs-names">${plNames}</div>
+          <div class="bs-role">${plRole}</div>
+        </div>
+
+        <div class="bs-and">-and-</div>
+
+        <div class="bs-side bs-side-right">
+          <div class="bs-names">${dfNames}</div>
+          <div class="bs-role">${dfRole}</div>
+        </div>
+      </div>
+
+      <div class="bs-toprule"></div>
+
+      <div class="bs-body">
+        <div class="bs-leftslab"></div>
+
+        <div class="bs-main">
+          <div class="bs-court">${court}</div>
+          <div class="bs-commence">Proceeding commenced at ${where || "(place)"}</div>
+
+          <div class="bs-doc-title">AFFIDAVIT OF ${deponentFull.toUpperCase()}</div>
+          <div class="bs-sworn">Sworn [date on export or left blank]</div>
+
+          <div class="bs-filer">
+            <div class="bs-filer-name">${nameLine || "&nbsp;"}</div>
+            <div class="bs-filer-addr">${addressBlock || "&nbsp;"}</div>
+            <div class="bs-filer-contact">
+              ${filer.email ? `E: ${filer.email}` : ""}
+              ${filer.email && filer.phone ? "&nbsp;&nbsp;" : ""}
+              ${filer.phone ? `M: ${filer.phone}` : ""}
+            </div>
+            ${licenseLine ? `<div class="bs-filer-license">${licenseLine}</div>` : ""}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 
 /* ---------- Init ---------- */
 document.addEventListener("DOMContentLoaded", async ()=>{
@@ -965,6 +1183,8 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   renderParagraphs();
 
   renderJurat(); // show blank jurat card
+  renderBacksheet();
+
 
   const addEnd=$("#addParaEnd"); if(addEnd) addEnd.onclick=()=>{ addPara(); renderParagraphs(); };
 

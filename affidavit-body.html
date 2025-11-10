@@ -40,14 +40,15 @@
             <button id="undoBtn" disabled>Undo last action</button>
             <button id="redoBtn" disabled>Redo last undo</button>
 
-            <!-- Exhibit Label Scheme Toggle -->
-            <div class="scheme-control" id="schemeControl" title="Toggle exhibit label style">
+            <!-- Exhibit Label Scheme Toggle (letters on left, numbers on right) -->
+            <div class="scheme-control" id="schemeControl" title="Toggle exhibit label style" role="group" aria-label="Exhibit label style">
               <span class="scheme-label">Exhibit labels:</span>
+              <span class="scheme-opt" id="optLetters">Letters</span>
               <label class="switch">
-                <input type="checkbox" id="schemeToggle" aria-label="Toggle exhibit labels letters/numbers">
+                <input type="checkbox" id="schemeToggle" aria-label="Toggle exhibit labels between letters and numbers">
                 <span class="slider"></span>
               </label>
-              <span class="scheme-option" id="schemeText">Letters</span>
+              <span class="scheme-opt" id="optNumbers">Numbers</span>
             </div>
           </div>
         </div>

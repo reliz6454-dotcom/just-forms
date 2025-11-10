@@ -581,7 +581,6 @@ function swapChipNodesInEditor(pId, idA, idB){
   const a = wrap.querySelector(`.exh-chip[data-ex-id="${idA}"]`);
   const b = wrap.querySelector(`.exh-chip[data-ex-id="${idB}"]`);
   if(!(a && b)){
-    // Even if not found (e.g., chip absent), still reapply to avoid losing edits
     ed.commands.setContent(wrap.innerHTML, false);
     return;
   }
@@ -589,13 +588,11 @@ function swapChipNodesInEditor(pId, idA, idB){
   const aParent = a.parentNode, bParent = b.parentNode;
   const aNext = a.nextSibling, bNext = b.nextSibling;
 
-  // Insert a where b was, and b where a was
   bParent.insertBefore(a, bNext);
   aParent.insertBefore(b, aNext);
 
   ed.commands.setContent(wrap.innerHTML, false);
 }
-// ↓ Add this helper (place above moveExhibit/removeExhibit)
 function persistEditorState(pId) {
   const ed = EDITORS.get(pId);
   if (!ed) return;
@@ -635,7 +632,6 @@ function addExhibits(pId, entries){
   const ed=EDITORS.get(pId);
   if(ed){ for(const exId of newIds){ ed.commands.insertExhibitChip({ exId, label: labels.get(exId)||"?" }); } }
 
-  // Keep stored HTML + all live editors in sync
   relabelAllChips();
   refreshAllEditorChipLabels();
 }
@@ -648,17 +644,13 @@ function moveExhibit(pId, exId, dir){
   if(idx<0) { saveParas(renumber(list)); return; }
   const j=idx+dir; if(j<0||j>=ex.length){ saveParas(renumber(list)); return; }
 
-  // capture neighbor BEFORE swap so we can swap the inline chips to match
   const neighborId = ex[j].id;
 
-  // swap in the model (rail order)
   [ex[idx], ex[j]]=[ex[j], ex[idx]];
   saveParas(renumber(list));
 
-  // swap inline chip DOM nodes to match the new order
   swapChipNodesInEditor(pId, exId, neighborId);
 
-  // relabel everywhere to reflect global sequence
   const labels=computeLabels(loadParas());
   const ed=EDITORS.get(pId);
   if(ed){
@@ -676,7 +668,6 @@ function moveExhibit(pId, exId, dir){
 }
 
 function removeExhibit(pId, exId) {
-  // 1) Update storage model first
   histPush();
   const list = loadParas().sort(byNo);
   const i = list.findIndex(pp => pp.id === pId);
@@ -687,22 +678,17 @@ function removeExhibit(pId, exId) {
   p.runs     = (p.runs || []).filter(r => !(r.type === "exhibit" && r.exId === exId));
   saveParas(renumber(list));
 
-  // 2) Remove the live TipTap chip; never let an exception skip the refresh
   try {
     const ed = EDITORS.get(pId);
     if (ed) {
-      ed.commands.removeExhibitChip(exId); // sets allowChipRemoval meta
-      purgeChipNodesInEditor(pId, exId);   // scrub any left-over span
+      ed.commands.removeExhibitChip(exId);
+      purgeChipNodesInEditor(pId, exId);
       persistEditorState(pId);
     }
-  } catch (_) {
-    // ignore; we still want to refresh globally
-  }
+  } catch (_) {}
 
-  // 3) Defer global rebuild to the next microtask so the PM transaction settles
-  //    (prevents stale labels / rail not updating)
   queueMicrotask(() => {
-    renderParagraphs();   // rebuild rows/rails + recompute labels + relabel chips
+    renderParagraphs();
   });
 }
 
@@ -840,19 +826,15 @@ function renderRow(p,total,labels){
   file.hidden=true; strip.append(addBtn,file); mid.append(strip);
 
   function renderRail(){
-    // Recompute fresh labels and latest paragraph snapshot each time
     const freshList = loadParas().sort(byNo).map(ensureRuns);
     const labelsNow = computeLabels(freshList);
     const latestP = freshList.find(x => x.id === p.id);
     if (latestP) {
-      // Keep this row's p.exhibits in sync with storage (post add/move/remove)
       p.exhibits = [...(latestP.exhibits || [])];
     }
 
-    // Clear existing rail chips
     [...strip.querySelectorAll(".rail-chip")].forEach(n=>n.remove());
 
-    // Rebuild rail with up-to-date labels (rail label intentionally without parentheses)
     (p.exhibits||[]).forEach((ex,idx)=>{
       const chip=elx("div",{className:"exhibit-chip rail-chip"});
       chip.dataset.exId = ex.id;
@@ -878,11 +860,9 @@ function renderRow(p,total,labels){
       rightBtn.onclick=()=>{moveExhibit(p.id,ex.id,+1); renderParagraphs();};
       editBtn.onclick=open;
 
-      // Optimistic remove: rail chip disappears immediately, then sync
       removeBtn.onclick = () => {
         const ok = confirm("Remove this exhibit from this paragraph? The underlying file will remain available.");
         if (!ok) return;
-        // No optimistic DOM changes, no disabling — let removeExhibit() own the flow
         removeExhibit(p.id, ex.id);
       };
 
@@ -892,7 +872,6 @@ function renderRow(p,total,labels){
   }
   renderRail();
 
-  // Handlers
   const want=()=>{let n=Math.round(Number(num.value)); if(!Number.isFinite(n)||n<1) n=1; if(n>total) n=total; return n; };
   const sync=()=>{ apply.disabled=(want()===p.number); };
   sync(); num.addEventListener("input",sync);
@@ -920,7 +899,6 @@ function renderRow(p,total,labels){
     file.value="";
   };
 
-  // Right spacer
   const right=elx("div",{className:"row-file"});
   row.append(left, mid, right);
   return row;
@@ -930,7 +908,6 @@ function renderRow(p,total,labels){
 function renderParagraphs(){
   const container=$("#paraList"); if(!container) return;
 
-  // Make sure saved HTML chip text reflects current global labels before we rebuild editors
   relabelAllChips();
 
   for (const [,ed] of EDITORS){ try{ed.destroy();}catch{} }
@@ -942,13 +919,11 @@ function renderParagraphs(){
   container.innerHTML="";
   list.forEach(p=> container.appendChild(renderRow(p, list.length, labels)));
 
-  // After rebuild, ensure all open editors show the current labels
   refreshAllEditorChipLabels();
 }
 
 /* ---------- Form 4C backsheet helpers ---------- */
 
-// short title of proceeding: first plaintiff v first defendant
 function shortTitle(c = {}) {
   const firstName = (p) => {
     const co = (p?.company || "").trim();
@@ -960,12 +935,10 @@ function shortTitle(c = {}) {
   return `${p1} v. ${d1}`;
 }
 
-// choose filer block (name/contact to appear on the backsheet)
 function pickFiler(c = {}, d = {}) {
   const sideList = (side) => side === "plaintiff" ? (c.plaintiffs || []) : (c.defendants || []);
   const lawyerOf = (party) => (party?.represented && party?.lawyer) ? party.lawyer : null;
 
-  // convenience: build display records with uniform shape
   const makePartyRecord = (party) => ({
     type: "party",
     name:
@@ -1004,7 +977,6 @@ function pickFiler(c = {}, d = {}) {
       const L = lawyerOf(p);
       if (L) return makeLawyerRecord(L);
     }
-    // fallback to first party’s own contact
     if (list[0]) return makePartyRecord(list[0]);
     return null;
   };
@@ -1032,12 +1004,10 @@ function pickFiler(c = {}, d = {}) {
       }
       return fallbackFirstSideLawyer(side);
     }
-    // If somehow not set, default to plaintiffs’ side
     return fallbackFirstSideLawyer("plaintiff");
   }
 
   if (role === "lawyer") {
-    // Use any lawyer on the selected lawyerSide if present; otherwise fallback
     const side = d.lawyerSide || null;
     if (side) {
       const list = sideList(side);
@@ -1046,7 +1016,6 @@ function pickFiler(c = {}, d = {}) {
           return makeLawyerRecord(p.lawyer);
         }
       }
-      // fallback to first party’s contact
       if (list[0]) return makePartyRecord(list[0]);
     }
     return fallbackFirstSideLawyer("plaintiff");
@@ -1057,7 +1026,6 @@ function pickFiler(c = {}, d = {}) {
     return fallbackFirstSideLawyer(side);
   }
 
-  // default: plaintiffs’ side
   return fallbackFirstSideLawyer("plaintiff");
 }
 
@@ -1070,7 +1038,6 @@ function renderBacksheet() {
   const isMotion = !!(c.motion && c.motion.isMotion);
   const movingSide = c.motion ? c.motion.movingSide : null;
 
-  // Helper: name extraction + et al.
   const namesList = (arr) => (Array.isArray(arr) ? arr : []).map(partyName).filter(Boolean);
   const etAlName = (arr) => {
     const names = namesList(arr);
@@ -1108,37 +1075,26 @@ function renderBacksheet() {
 
   el.innerHTML = `
     <div class="bs">
-
-      <!-- NEW: Court file number at the absolute top-right -->
       <div class="bs-file-topline">Court File No.: ${fileNo || ""}</div>
-
-      <!-- Parties row -->
       <div class="bs-toprow">
         <div class="bs-side">
           <div class="bs-names">${plNames}</div>
           <div class="bs-role">${plRole}</div>
         </div>
-
         <div class="bs-and">-and-</div>
-
         <div class="bs-side bs-side-right">
           <div class="bs-names">${dfNames}</div>
           <div class="bs-role">${dfRole}</div>
         </div>
       </div>
-
       <div class="bs-toprule"></div>
-
       <div class="bs-body">
         <div class="bs-leftslab"></div>
-
         <div class="bs-main">
           <div class="bs-court">${court}</div>
           <div class="bs-commence">Proceeding commenced at ${where || "(place)"}</div>
-
           <div class="bs-doc-title">AFFIDAVIT OF ${deponentFull.toUpperCase()}</div>
           <div class="bs-sworn">Sworn [date on export or left blank]</div>
-
           <div class="bs-filer">
             <div class="bs-filer-name">${nameLine || "&nbsp;"}</div>
             <div class="bs-filer-addr">${addressBlock || "&nbsp;"}</div>
@@ -1159,7 +1115,7 @@ function renderBacksheet() {
 document.addEventListener("DOMContentLoaded", async ()=>{
   ensureAffidavitId();
 
-  // Smart Back: try history, otherwise go to the intro page
+  // Smart Back
   function smartBack(fallbackHref){
     try {
       if (document.referrer &&
@@ -1174,21 +1130,37 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   const back = $("#back");
   if (back) back.onclick = () => smartBack("affidavit-intro.html");
 
-  const toggle=$("#schemeToggle"), textEl=$("#schemeText");
-  if(toggle){
-    const cur=getExhibitScheme(); toggle.checked=(cur==="numbers"); if(textEl) textEl.textContent=toggle.checked?"Numbers":"Letters";
-    toggle.addEventListener("change",()=>{ 
-      const s=toggle.checked?"numbers":"letters"; 
-      setExhibitScheme(s); 
-      if(textEl) textEl.textContent=toggle.checked?"Numbers":"Letters";
-      relabelAllChips();
-      refreshAllEditorChipLabels();
-      renderParagraphs(); 
+  // Exhibit scheme control (letters left, numbers right)
+  const toggle = $("#schemeToggle");
+  const optL = $("#optLetters");
+  const optN = $("#optNumbers");
+
+  function applyScheme(s){
+    setExhibitScheme(s);
+    if (toggle) toggle.checked = (s === "numbers");
+    optL?.classList.toggle("active", s === "letters");
+    optN?.classList.toggle("active", s === "numbers");
+    relabelAllChips();
+    refreshAllEditorChipLabels();
+    renderParagraphs();
+  }
+
+  if (toggle){
+    const cur = getExhibitScheme();
+    toggle.checked = (cur === "numbers");
+    optL?.classList.toggle("active", cur === "letters");
+    optN?.classList.toggle("active", cur === "numbers");
+
+    toggle.addEventListener("change",()=>{
+      applyScheme(toggle.checked ? "numbers" : "letters");
     });
+    optL?.addEventListener("click",()=>applyScheme("letters"));
+    optN?.addEventListener("click",()=>applyScheme("numbers"));
   }
 
   const ub=$("#undoBtn"), rb=$("#redoBtn"); if(ub) ub.onclick=undo; if(rb) rb.onclick=redo;
 
+  // Doc meta modal wiring
   docMetaModal=$("#docMetaModal");
   docMetaForm=$("#docMetaForm");
   docMetaErr=$("#docMetaErrors");
@@ -1211,7 +1183,7 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   if(loadParas().length===0) addPara();
   renderParagraphs();
 
-  renderJurat(); // show blank jurat card
+  renderJurat();
   renderBacksheet();
 
   const addEnd=$("#addParaEnd"); if(addEnd) addEnd.onclick=()=>{ addPara(); renderParagraphs(); };

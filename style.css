@@ -428,3 +428,5 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
 .bs-filer-addr{ margin-top:2px; }
 .bs-filer-contact{ margin-top:2px; }
 .bs-filer-license{ margin-top:2px; }
+
+.scheme-control .scheme-opt.active { font-weight: 700; }

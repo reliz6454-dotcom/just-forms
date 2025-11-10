@@ -1,359 +1,407 @@
-// affidavit-intro.js — checklist UX: multi-select for Lawyer/Witness, single-select for Officer/Employee, radios for self party
-(() => {
-  const LS_CASE_KEY = "jf_case";
-  const LS_OATH_KEY = "jf_oathType";
+// affidavit-intro.js — for affidavit-intro.html (robust reveal + org validation)
+const LS_CASE_KEY = "jf_case";
 
-  const val = (id) => (document.getElementById(id)?.value || "").trim();
+/* ------------ tiny helpers ------------ */
+const byStr = (s) => (s || "").trim();
+const $ = (sel, el = document) => el.querySelector(sel);
+const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
 
-  function loadCase() {
-    try { return JSON.parse(localStorage.getItem(LS_CASE_KEY) || "{}"); }
-    catch { return {}; }
-  }
-  function parties(side) {
-    const data = loadCase() || {};
-    const list = side === "plaintiff" ? data.plaintiffs : data.defendants;
-    return Array.isArray(list) ? list : [];
-  }
-  function partyDisplayName(p) {
-    if (!p) return "";
-    const company = (p.company || "").trim();
-    const person = [p.first || "", p.last || ""].map(s => s.trim()).filter(Boolean).join(" ").trim();
-    return company || person || "";
-  }
-  function corporatePartyIndexes(side) {
-    // Return [{index, party}] for corporate parties only, index is in the ORIGINAL array
-    const all = parties(side);
-    const out = [];
-    all.forEach((p, i) => {
-      if ((p?.company || "").trim().length > 0) out.push({ index: i, party: p });
-    });
-    return out;
-  }
+function loadCase() {
+  try { return JSON.parse(localStorage.getItem(LS_CASE_KEY) || "{}") || {}; }
+  catch { return {}; }
+}
+function saveCase(obj) {
+  localStorage.setItem(LS_CASE_KEY, JSON.stringify(obj || {}));
+}
+const partyName = (p) => byStr(p?.company) || [byStr(p?.first), byStr(p?.last)].filter(Boolean).join(" ").trim();
+const isCorp = (p) => !!byStr(p?.company);
 
-  /* ---------- Renderers ---------- */
-  function renderPartyRadios(container, side, nameAttr, autoSelectIfSingle = true) {
-    const list = parties(side);
-    container.innerHTML = "";
-    list.forEach((p, idx) => {
-      const id = `${nameAttr}-${idx}`;
-      const label = partyDisplayName(p) || `Party #${idx + 1}`;
-      const row = document.createElement("label");
-      row.innerHTML = `<input type="radio" name="${nameAttr}" id="${id}" value="${idx}"> ${label}`;
-      container.appendChild(row);
-    });
-    if (autoSelectIfSingle && list.length === 1) {
-      const first = container.querySelector(`input[name="${nameAttr}"]`);
-      if (first) first.checked = true;
-    }
-  }
+function showNode(node, on) {
+  if (!node) return;
+  node.hidden = !on;
+  node.style.display = on ? "" : "none"; // <- critical fix (handles inline display:none)
+}
+function show(selOrNode, on) {
+  if (typeof selOrNode === "string") showNode($(selOrNode), on);
+  else showNode(selOrNode, on);
+}
 
-  // ✅ Rewritten: value is the ORIGINAL index in the full party array
-  function renderOrgRadiosCorporateOnly(container, side, nameAttr) {
-    container.innerHTML = "";
-    const corp = corporatePartyIndexes(side);
-    if (corp.length === 0) {
-      const note = document.createElement("div");
-      note.className = "hint";
-      note.textContent = "No corporate organizations found on this side.";
-      container.appendChild(note);
-      return;
-    }
-    corp.forEach(({ index, party }) => {
-      const id = `${nameAttr}-${index}`;
-      const label = partyDisplayName(party);
-      const row = document.createElement("label");
-      row.innerHTML = `<input type="radio" name="${nameAttr}" id="${id}" value="${index}"> ${label}`;
-      container.appendChild(row);
-    });
-  }
+/* ------------ builders ------------ */
+function renderSelfPartyList(container, list, savedIdx) {
+  if (!container) return;
+  container.innerHTML = "";
+  list.forEach((p, idx) => {
+    const id = `self-party-${idx}`;
+    const label = document.createElement("label");
+    label.setAttribute("for", id);
 
-  function renderPartyCheckboxes(container, side, nameAttr) {
-    const list = parties(side);
-    container.innerHTML = "";
-    list.forEach((p, idx) => {
-      const id = `${nameAttr}-${idx}`;
-      const label = partyDisplayName(p) || `Party #${idx + 1}`;
-      const row = document.createElement("label");
-      row.innerHTML = `<input type="checkbox" name="${nameAttr}" id="${id}" value="${idx}"> ${label}`;
-      container.appendChild(row);
-    });
-  }
+    const inp = document.createElement("input");
+    inp.type = "radio";
+    inp.name = "self-party";
+    inp.id = id;
+    inp.value = String(idx);
+    if (Number(savedIdx) === idx) inp.checked = true;
 
-  function getCheckedIndexes(nameAttr) {
-    return Array.from(document.querySelectorAll(`input[name="${nameAttr}"]:checked`))
-      .map(i => parseInt(i.value, 10))
-      .filter(Number.isInteger);
-  }
-
-  /* ---------- DOM Ready ---------- */
-  document.addEventListener("DOMContentLoaded", () => {
-    const form = document.querySelector("form");
-    if (!form) return;
-
-    // Back button like body page
-    const backBtn = document.getElementById("back");
-    if (backBtn) backBtn.onclick = () => history.back();
-
-    // Identity/location
-    const first = document.getElementById("deponent-first-name");
-    const last  = document.getElementById("deponent-last-name");
-    const city  = document.getElementById("deponent-city");
-    const prov  = document.getElementById("deponent-province");
-
-    // Role / Oath
-    const roleRadios = Array.from(document.querySelectorAll('input[name="role"]'));
-    const oathRadios = Array.from(document.querySelectorAll('input[name="oath"]'));
-
-    // Self party
-    const selfPartyBox = document.getElementById("self-party-box");
-    const selfPartyList = document.getElementById("self-party-list");
-
-    // Officer/Employee
-    const roleDetailBox = document.getElementById("role-detail-box");
-    const roleDetail    = document.getElementById("role-detail");
-    const affiliationBox= document.getElementById("affiliation-box");
-    const affSidePl     = document.getElementById("aff-side-plaintiff");
-    const affSideDf     = document.getElementById("aff-side-defendant");
-    const affiliationPartyList = document.getElementById("affiliation-party-list");
-
-    // Lawyer
-    const lawyerBox = document.getElementById("lawyer-box");
-    const lawSidePl = document.getElementById("law-side-plaintiff");
-    const lawSideDf = document.getElementById("law-side-defendant");
-    const lawyerAll = document.getElementById("lawyer-all");
-    const lawyerAllLabel = document.getElementById("lawyer-all-label");
-    const lawyerPartyList = document.getElementById("lawyer-party-list");
-
-    // Witness
-    const witnessBox = document.getElementById("witness-box");
-    const witSidePl  = document.getElementById("wit-side-plaintiff");
-    const witSideDf  = document.getElementById("wit-side-defendant");
-    const witnessAll = document.getElementById("witness-all");
-    const witnessAllLabel = document.getElementById("witness-all-label");
-    const witnessPartyList = document.getElementById("witness-party-list");
-
-    // Required basics
-    [first, last, city, prov].forEach(i => i && i.setAttribute("required", ""));
-    if (!roleRadios.some(r => r.hasAttribute("required"))) roleRadios[0]?.setAttribute("required", "");
-    if (!oathRadios.some(r => r.hasAttribute("required"))) document.getElementById("swear")?.setAttribute("required", "");
-
-    /* ----- Role UI ----- */
-    function updateRoleUI() {
-      const role = document.querySelector('input[name="role"]:checked')?.value || "";
-
-      const isPl = role === "plaintiff";
-      const isDf = role === "defendant";
-      const isLaw = role === "lawyer";
-      const isOff = role === "officer";
-      const isEmp = role === "employee";
-      const isOE = isOff || isEmp;
-      const isWit = role === "witness";
-
-      // Self party radios
-      selfPartyBox.style.display = (isPl || isDf) ? "block" : "none";
-      if (isPl) renderPartyRadios(selfPartyList, "plaintiff", "self-party");
-      else if (isDf) renderPartyRadios(selfPartyList, "defendant", "self-party");
-      else selfPartyList.innerHTML = "";
-
-      // Officer/Employee single org
-      roleDetailBox.style.display = isOE ? "block" : "none";
-      affiliationBox.style.display = isOE ? "block" : "none";
-      if (!isOE) {
-        roleDetail.value = "";
-        [affSidePl, affSideDf].forEach(x => x && (x.checked = false));
-        affiliationPartyList.innerHTML = "";
-      }
-
-      // Lawyer multi
-      lawyerBox.style.display = isLaw ? "block" : "none";
-      if (!isLaw) {
-        [lawSidePl, lawSideDf].forEach(x => x && (x.checked = false));
-        lawyerAll.checked = false;
-        lawyerPartyList.innerHTML = "";
-        lawyerAllLabel.textContent = "All Plaintiffs";
-      }
-
-      // Witness multi
-      witnessBox.style.display = isWit ? "block" : "none";
-      if (!isWit) {
-        [witSidePl, witSideDf].forEach(x => x && (x.checked = false));
-        witnessAll.checked = false;
-        witnessPartyList.innerHTML = "";
-        witnessAllLabel.textContent = "All Plaintiffs";
-      }
-    }
-    roleRadios.forEach(r => r.addEventListener("change", updateRoleUI));
-    updateRoleUI();
-
-    /* ----- Side pick → populate lists ----- */
-    function onAffSideChange() {
-      const side = affSidePl?.checked ? "plaintiff" : (affSideDf?.checked ? "defendant" : "");
-      affiliationPartyList.innerHTML = "";
-      if (side) renderOrgRadiosCorporateOnly(affiliationPartyList, side, "aff-party");
-    }
-    [affSidePl, affSideDf].forEach(r => r && r.addEventListener("change", onAffSideChange));
-
-    function onLawSideChange() {
-      const side = lawSidePl?.checked ? "plaintiff" : (lawSideDf?.checked ? "defendant" : "");
-      lawyerPartyList.innerHTML = "";
-      lawyerAll.checked = false;
-      if (side) {
-        renderPartyCheckboxes(lawyerPartyList, side, "law-party");
-        lawyerAllLabel.textContent = side === "plaintiff" ? "All Plaintiffs" : "All Defendants";
-      } else {
-        lawyerAllLabel.textContent = "All Plaintiffs";
-      }
-    }
-    [lawSidePl, lawSideDf].forEach(r => r && r.addEventListener("change", onLawSideChange));
-
-    function onWitSideChange() {
-      const side = witSidePl?.checked ? "plaintiff" : (witSideDf?.checked ? "defendant" : "");
-      witnessPartyList.innerHTML = "";
-      witnessAll.checked = false;
-      if (side) {
-        renderPartyCheckboxes(witnessPartyList, side, "wit-party");
-        witnessAllLabel.textContent = side === "plaintiff" ? "All Plaintiffs" : "All Defendants";
-      } else {
-        witnessAllLabel.textContent = "All Plaintiffs";
-      }
-    }
-    [witSidePl, witSideDf].forEach(r => r && r.addEventListener("change", onWitSideChange));
-
-    /* ----- “Select All” wiring for lawyer/witness ----- */
-    function syncAllCheckbox(master, nameAttr) {
-      const boxes = Array.from(document.querySelectorAll(`input[name="${nameAttr}"]`));
-      boxes.forEach(b => b.checked = master.checked);
-    }
-    function reflectMasterFromChildren(master, nameAttr) {
-      const boxes = Array.from(document.querySelectorAll(`input[name="${nameAttr}"]`));
-      const allOn = boxes.length > 1 && boxes.every(b => b.checked);
-      master.checked = allOn;
-    }
-
-    lawyerAll.addEventListener("change", () => syncAllCheckbox(lawyerAll, "law-party"));
-    witnessAll.addEventListener("change", () => syncAllCheckbox(witnessAll, "wit-party"));
-
-    lawyerPartyList.addEventListener("change", () => reflectMasterFromChildren(lawyerAll, "law-party"));
-    witnessPartyList.addEventListener("change", () => reflectMasterFromChildren(witnessAll, "wit-party"));
-
-    /* ----- Submit → validate & save ----- */
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      if (!form.reportValidity()) return;
-
-      const role = document.querySelector('input[name="role"]:checked')?.value || "";
-      const isPl = role === "plaintiff";
-      const isDf = role === "defendant";
-      const isLaw = role === "lawyer";
-      const isOff = role === "officer";
-      const isEmp = role === "employee";
-      const isOE = isOff || isEmp;
-      const isWit = role === "witness";
-
-      // Self party (exactly one)
-      let selfPartyIndex = null;
-      if (isPl || isDf) {
-        const sel = document.querySelector('input[name="self-party"]:checked');
-        if (!sel) { alert(`Please select which ${isPl ? "plaintiff" : "defendant"} you are.`); return; }
-        selfPartyIndex = parseInt(sel.value, 10);
-        if (!Number.isInteger(selfPartyIndex)) { alert("Please select a valid party."); return; }
-      }
-
-      // Officer/Employee — single organization (CORPORATE ONLY)
-      let roleSide = null;
-      let rolePartyIndex = null;
-      if (isOE) {
-        if (!val("role-detail")) {
-          document.getElementById("role-detail").setCustomValidity("Please enter your role/title.");
-          form.reportValidity();
-          document.getElementById("role-detail").focus();
-          return;
-        } else {
-          document.getElementById("role-detail").setCustomValidity("");
-        }
-        roleSide = (document.getElementById("aff-side-plaintiff")?.checked ? "plaintiff"
-                 : document.getElementById("aff-side-defendant")?.checked ? "defendant" : null);
-        if (!roleSide) { alert("Please choose Plaintiffs or Defendants for your employer."); return; }
-        const sel = document.querySelector('input[name="aff-party"]:checked');
-        if (!sel) { alert("Please select the specific organization (one only)."); return; }
-        rolePartyIndex = parseInt(sel.value, 10);
-        if (!Number.isInteger(rolePartyIndex)) { alert("Please select a valid organization."); return; }
-
-        // Extra guard: ensure the chosen party is corporate
-        const chosen = parties(roleSide)[rolePartyIndex];
-        if (!chosen || !(chosen.company || "").trim()) {
-          alert("Please select a corporate organization.");
-          return;
-        }
-      }
-
-      // Lawyer — multi
-      let lawyerSide = null;
-      let lawyerPartyIndexes = [];
-      let lawyerAllParties = false;
-      if (isLaw) {
-        lawyerSide = lawSidePl?.checked ? "plaintiff" : (lawSideDf?.checked ? "defendant" : null);
-        if (!lawyerSide) { alert("Please choose Plaintiffs or Defendants you represent."); return; }
-        const picks = getCheckedIndexes("law-party");
-        if (picks.length === 0 && !lawyerAll.checked) { alert("Select at least one party, or choose Select All."); return; }
-        lawyerAllParties = lawyerAll.checked;
-        lawyerPartyIndexes = picks;
-      }
-
-      // Witness — multi
-      let witnessSide = null;
-      let witnessPartyIndexes = [];
-      let witnessAllParties = false;
-      if (isWit) {
-        witnessSide = witSidePl?.checked ? "plaintiff" : (witSideDf?.checked ? "defendant" : null);
-        if (!witnessSide) { alert("Please choose whether your evidence supports Plaintiffs or Defendants."); return; }
-        const picks = getCheckedIndexes("wit-party");
-        if (picks.length === 0 && !witnessAll.checked) { alert("Select at least one party, or choose Select All."); return; }
-        witnessAllParties = witnessAll.checked;
-        witnessPartyIndexes = picks;
-      }
-
-      // Oath
-      const oath = document.querySelector('input[name="oath"]:checked')?.value || null;
-      if (!oath) { alert("Please choose whether you will swear or affirm."); return; }
-      localStorage.setItem(LS_OATH_KEY, JSON.stringify(oath));
-
-      // Save
-      const deponent = {
-        first: val("deponent-first-name"),
-        last:  val("deponent-last-name"),
-        city:  val("deponent-city"),
-        prov:  val("deponent-province"),
-        role,
-
-        // self as party
-        selfPartyIndex,
-
-        // officer/employee (single, corporate only)
-        roleDetail: val("role-detail") || null,
-        roleSide,
-        rolePartyIndex,
-
-        // lawyer (multi)
-        lawyerSide,
-        lawyerPartyIndexes,
-        lawyerAllParties,
-
-        // witness (multi)
-        witnessSide,
-        witnessPartyIndexes,
-        witnessAllParties
-      };
-
-      const existing = JSON.parse(localStorage.getItem(LS_CASE_KEY) || "null");
-      if (existing) {
-        existing.deponent = deponent;
-        localStorage.setItem(LS_CASE_KEY, JSON.stringify(existing));
-      } else {
-        localStorage.setItem(LS_CASE_KEY, JSON.stringify({ deponent }));
-      }
-
-      window.location.href = "affidavit-body.html";
-    });
+    label.appendChild(inp);
+    label.appendChild(document.createTextNode(" " + (partyName(p) || `Party #${idx + 1}`)));
+    container.appendChild(label);
   });
-})();
+}
+
+function renderAffiliationList(container, list, savedIdx) {
+  if (!container) return;
+  container.innerHTML = "";
+
+  const corps = list.map((p, i) => ({ p, i })).filter(({ p }) => isCorp(p));
+  if (corps.length === 0) {
+    const msg = document.createElement("p");
+    msg.className = "hint";
+    msg.textContent = "No corporate parties on this side.";
+    container.appendChild(msg);
+    return;
+  }
+
+  corps.forEach(({ p, i }) => {
+    const id = `aff-pick-${i}`;
+    const label = document.createElement("label");
+    label.setAttribute("for", id);
+
+    const inp = document.createElement("input");
+    inp.type = "radio";
+    inp.name = "aff-pick";
+    inp.id = id;
+    inp.value = String(i); // store ORIGINAL index into side list
+    if (Number(savedIdx) === i) inp.checked = true;
+
+    label.appendChild(inp);
+    label.appendChild(document.createTextNode(" " + (partyName(p) || `Organization #${i + 1}`)));
+    container.appendChild(label);
+  });
+}
+
+function renderPartyChecklist(container, list, savedIdxs) {
+  if (!container) return;
+  const chosen = new Set((savedIdxs || []).map(Number));
+  container.innerHTML = "";
+  list.forEach((p, idx) => {
+    const id = `multi-pick-${idx}`;
+    const label = document.createElement("label");
+    label.setAttribute("for", id);
+
+    const inp = document.createElement("input");
+    inp.type = "checkbox";
+    inp.className = "multi-pick";
+    inp.id = id;
+    inp.value = String(idx);
+    if (chosen.has(idx)) inp.checked = true;
+
+    label.appendChild(inp);
+    label.appendChild(document.createTextNode(" " + (partyName(p) || `Party #${idx + 1}`)));
+    container.appendChild(label);
+  });
+}
+
+/* ------------ UI sync ------------ */
+function syncRoleUI() {
+  const role = document.querySelector('input[name="role"]:checked')?.value || "";
+
+  show("#self-party-box", role === "plaintiff" || role === "defendant");
+  show("#role-detail-box", role === "employee" || role === "officer");
+  show("#affiliation-box", role === "employee" || role === "officer");
+  show("#lawyer-box", role === "lawyer");
+  show("#witness-box", role === "witness");
+}
+
+/* ------------ populate from saved ------------ */
+function populateFromSaved() {
+  const c = loadCase();
+  const d = c.deponent || {};
+
+  // simple fields
+  $("#deponent-first-name") && ($("#deponent-first-name").value = d.first || "");
+  $("#deponent-last-name")  && ($("#deponent-last-name").value  = d.last  || "");
+  $("#deponent-city")       && ($("#deponent-city").value       = d.city  || "");
+  $("#deponent-province")   && ($("#deponent-province").value   = d.prov  || "");
+  $("#role-detail")         && ($("#role-detail").value         = d.roleDetail || "");
+
+  // role
+  if (d.role) {
+    const r = $(`#role-${d.role.toLowerCase()}`);
+    if (r) r.checked = true;
+  }
+
+  // oath
+  if (d.oath) {
+    const o = document.querySelector(`input[name="oath"][value="${d.oath}"]`);
+    if (o) o.checked = true;
+  }
+
+  const pls = Array.isArray(c.plaintiffs) ? c.plaintiffs : [];
+  const dfs = Array.isArray(c.defendants) ? c.defendants : [];
+  const role = document.querySelector('input[name="role"]:checked')?.value || "";
+
+  // self party
+  if (role === "plaintiff") {
+    renderSelfPartyList($("#self-party-list"), pls, d.selfPartyIndex ?? 0);
+  } else if (role === "defendant") {
+    renderSelfPartyList($("#self-party-list"), dfs, d.selfPartyIndex ?? 0);
+  } else {
+    $("#self-party-list") && ($("#self-party-list").innerHTML = "");
+  }
+
+  // employee/officer affiliation
+  if (role === "employee" || role === "officer") {
+    const side = (d.roleSide === "defendant") ? "defendant" : "plaintiff";
+    if (side === "defendant") $("#aff-side-defendant").checked = true;
+    else $("#aff-side-plaintiff").checked = true;
+
+    const list = side === "defendant" ? dfs : pls;
+    renderAffiliationList($("#affiliation-party-list"), list, d.rolePartyIndex);
+  } else {
+    $("#affiliation-party-list") && ($("#affiliation-party-list").innerHTML = "");
+  }
+
+  // lawyer
+  if (role === "lawyer") {
+    const side = (d.lawyerSide === "defendant") ? "defendant" : "plaintiff";
+    if (side === "defendant") $("#law-side-defendant").checked = true;
+    else $("#law-side-plaintiff").checked = true;
+
+    $("#lawyer-all-label").textContent = side === "defendant" ? "All Defendants" : "All Plaintiffs";
+    const list = side === "defendant" ? dfs : pls;
+    renderPartyChecklist($("#lawyer-party-list"), list, d.lawyerPartyIndexes || []);
+    $("#lawyer-all").checked = !!d.lawyerAllParties;
+  } else {
+    $("#lawyer-party-list") && ($("#lawyer-party-list").innerHTML = "");
+  }
+
+  // witness
+  if (role === "witness") {
+    const side = (d.witnessSide === "defendant") ? "defendant" : "plaintiff";
+    if (side === "defendant") $("#wit-side-defendant").checked = true;
+    else $("#wit-side-plaintiff").checked = true;
+
+    $("#witness-all-label").textContent = side === "defendant" ? "All Defendants" : "All Plaintiffs";
+    const list = side === "defendant" ? dfs : pls;
+    renderPartyChecklist($("#witness-party-list"), list, d.witnessPartyIndexes || []);
+    $("#witness-all").checked = !!d.witnessAllParties;
+  } else {
+    $("#witness-party-list") && ($("#witness-party-list").innerHTML = "");
+  }
+
+  // finally reveal blocks for current role
+  syncRoleUI();
+}
+
+/* ------------ submit ------------ */
+function onSubmit(e) {
+  e.preventDefault();
+
+  const c = loadCase();
+  const pls = Array.isArray(c.plaintiffs) ? c.plaintiffs : [];
+  const dfs = Array.isArray(c.defendants) ? c.defendants : [];
+
+  const role = document.querySelector('input[name="role"]:checked')?.value || "";
+  const d = {
+    role,
+    first: byStr($("#deponent-first-name")?.value),
+    last:  byStr($("#deponent-last-name")?.value),
+    city:  byStr($("#deponent-city")?.value),
+    prov:  byStr($("#deponent-province")?.value),
+    roleDetail: byStr($("#role-detail")?.value),
+  };
+
+  const oath = document.querySelector('input[name="oath"]:checked')?.value;
+  if (!oath) { alert("Please select Swear or Affirm."); return; }
+  d.oath = oath;
+
+  switch (role) {
+    case "plaintiff": {
+      const sel = document.querySelector('input[name="self-party"]:checked');
+      const idx = sel ? Number(sel.value) : NaN;
+      if (!Number.isInteger(idx) || idx < 0 || idx >= pls.length) {
+        alert("Please select which Plaintiff you are.");
+        return;
+      }
+      d.selfPartyIndex = idx;
+      break;
+    }
+    case "defendant": {
+      const sel = document.querySelector('input[name="self-party"]:checked');
+      const idx = sel ? Number(sel.value) : NaN;
+      if (!Number.isInteger(idx) || idx < 0 || idx >= dfs.length) {
+        alert("Please select which Defendant you are.");
+        return;
+      }
+      d.selfPartyIndex = idx;
+      break;
+    }
+    case "employee":
+    case "officer": {
+      const side = document.querySelector('input[name="aff-side"]:checked')?.value;
+      if (side !== "plaintiff" && side !== "defendant") {
+        alert("Please choose whether you work for a Plaintiff or a Defendant.");
+        return;
+      }
+      const list = side === "defendant" ? dfs : pls;
+
+      // ensure there is at least one corporation to pick
+      if (!list.some(isCorp)) {
+        alert(`No corporate ${side === "defendant" ? "defendants" : "plaintiffs"} entered on Page 1.`);
+        return;
+      }
+
+      const sel = document.querySelector('input[name="aff-pick"]:checked');
+      const idx = sel ? Number(sel.value) : NaN;
+
+      if (!Number.isInteger(idx) || !list[idx]) {
+        alert("Please select a valid organization.");
+        return;
+      }
+      if (!isCorp(list[idx])) {
+        alert("Please select a valid organization.");
+        return;
+      }
+
+      d.roleSide = side;
+      d.rolePartyIndex = idx;
+      break;
+    }
+    case "lawyer": {
+      const side = document.querySelector('input[name="law-side"]:checked')?.value;
+      if (side !== "plaintiff" && side !== "defendant") {
+        alert("For 'Lawyer', please select Plaintiffs or Defendants.");
+        return;
+      }
+      d.lawyerSide = side;
+      d.lawyerAllParties = !!$("#lawyer-all")?.checked;
+      const list = side === "defendant" ? dfs : pls;
+      const chosen = $$("#lawyer-party-list .multi-pick").filter(n => n.checked).map(n => Number(n.value));
+      d.lawyerPartyIndexes = d.lawyerAllParties ? [] :
+        chosen.filter(i => Number.isInteger(i) && i >= 0 && i < list.length);
+      break;
+    }
+    case "witness": {
+      const side = document.querySelector('input[name="wit-side"]:checked')?.value || "plaintiff";
+      d.witnessSide = side === "defendant" ? "defendant" : "plaintiff";
+      d.witnessAllParties = !!$("#witness-all")?.checked;
+      const list = d.witnessSide === "defendant" ? dfs : pls;
+      const chosen = $$("#witness-party-list .multi-pick").filter(n => n.checked).map(n => Number(n.value));
+      d.witnessPartyIndexes = d.witnessAllParties ? [] :
+        chosen.filter(i => Number.isInteger(i) && i >= 0 && i < list.length);
+      break;
+    }
+    default:
+      alert("Please choose your role in this case.");
+      return;
+  }
+
+  c.deponent = d;
+  try { saveCase(c); } catch(_) { alert("Could not save in this browser."); return; }
+  window.location.href = "affidavit-body.html";
+}
+
+/* ------------ wiring ------------ */
+document.addEventListener("DOMContentLoaded", () => {
+  // Back
+  $("#back")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    try {
+      if (document.referrer && new URL(document.referrer).origin === location.origin && history.length > 1) {
+        history.back(); return;
+      }
+    } catch(_) {}
+    window.location.href = "index.html";
+  });
+
+  // Initial populate
+  populateFromSaved();
+
+  // Role toggles → rebuild dynamic sections + reveal
+  $$('input[name="role"]').forEach(r => r.addEventListener("change", () => {
+    const c = loadCase();
+    const pls = Array.isArray(c.plaintiffs) ? c.plaintiffs : [];
+    const dfs = Array.isArray(c.defendants) ? c.defendants : [];
+    const role = document.querySelector('input[name="role"]:checked')?.value || "";
+
+    if (role === "plaintiff") {
+      renderSelfPartyList($("#self-party-list"), pls, 0);
+    } else if (role === "defendant") {
+      renderSelfPartyList($("#self-party-list"), dfs, 0);
+    } else {
+      $("#self-party-list") && ($("#self-party-list").innerHTML = "");
+    }
+
+    if (role === "employee" || role === "officer") {
+      $("#aff-side-plaintiff").checked = true; // default
+      renderAffiliationList($("#affiliation-party-list"), pls, null);
+    } else {
+      $("#affiliation-party-list") && ($("#affiliation-party-list").innerHTML = "");
+    }
+
+    if (role === "lawyer") {
+      $("#law-side-plaintiff").checked = true;
+      $("#lawyer-all").checked = false;
+      $("#lawyer-all-label").textContent = "All Plaintiffs";
+      renderPartyChecklist($("#lawyer-party-list"), pls, []);
+    } else {
+      $("#lawyer-party-list") && ($("#lawyer-party-list").innerHTML = "");
+    }
+
+    if (role === "witness") {
+      $("#wit-side-plaintiff").checked = true;
+      $("#witness-all").checked = false;
+      $("#witness-all-label").textContent = "All Plaintiffs";
+      renderPartyChecklist($("#witness-party-list"), pls, []);
+    } else {
+      $("#witness-party-list") && ($("#witness-party-list").innerHTML = "");
+    }
+
+    syncRoleUI();
+  }));
+
+  // Employee/Officer: switch side
+  $$('input[name="aff-side"]').forEach(r => r.addEventListener("change", () => {
+    const c = loadCase();
+    const pls = Array.isArray(c.plaintiffs) ? c.plaintiffs : [];
+    const dfs = Array.isArray(c.defendants) ? c.defendants : [];
+    const side = document.querySelector('input[name="aff-side"]:checked')?.value || "plaintiff";
+    renderAffiliationList($("#affiliation-party-list"), side === "defendant" ? dfs : pls, null);
+  }));
+
+  // Lawyer: switch side
+  $$('input[name="law-side"]').forEach(r => r.addEventListener("change", () => {
+    const c = loadCase();
+    const pls = Array.isArray(c.plaintiffs) ? c.plaintiffs : [];
+    const dfs = Array.isArray(c.defendants) ? c.defendants : [];
+    const side = document.querySelector('input[name="law-side"]:checked')?.value || "plaintiff";
+    $("#lawyer-all").checked = false;
+    $("#lawyer-all-label").textContent = side === "defendant" ? "All Defendants" : "All Plaintiffs";
+    renderPartyChecklist($("#lawyer-party-list"), side === "defendant" ? dfs : pls, []);
+  }));
+
+  // Witness: switch side
+  $$('input[name="wit-side"]').forEach(r => r.addEventListener("change", () => {
+    const c = loadCase();
+    const pls = Array.isArray(c.plaintiffs) ? c.plaintiffs : [];
+    const dfs = Array.isArray(c.defendants) ? c.defendants : [];
+    const side = document.querySelector('input[name="wit-side"]:checked')?.value || "plaintiff";
+    $("#witness-all").checked = false;
+    $("#witness-all-label").textContent = side === "defendant" ? "All Defendants" : "All Plaintiffs";
+    renderPartyChecklist($("#witness-party-list"), side === "defendant" ? dfs : pls, []);
+  }));
+
+  // All-toggles simply clear explicit selections (keeps state simple)
+  $("#lawyer-all")?.addEventListener("change", () => {
+    $$("#lawyer-party-list .multi-pick").forEach(ch => ch.checked = false);
+  });
+  $("#witness-all")?.addEventListener("change", () => {
+    $$("#witness-party-list .multi-pick").forEach(ch => ch.checked = false);
+  });
+
+  // Submit
+  $("form")?.addEventListener("submit", onSubmit);
+
+  // Ensure correct reveal at first paint
+  syncRoleUI();
+});

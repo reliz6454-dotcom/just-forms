@@ -210,6 +210,7 @@ function renderIntro(){
   const nameOf = (p)=>[p?.first,p?.last].filter(Boolean).join(" ").trim();
   const role = (d.role || "").toLowerCase();
 
+  // Deponent display name (falls back to first party on that side if needed)
   let full = nameOf(d)
     || (role==="plaintiff"  && c.plaintiffs?.[0] ? nameOf(c.plaintiffs[0])
     :  (role==="defendant" && c.defendants?.[0] ? nameOf(c.defendants[0]) : ""));
@@ -217,19 +218,46 @@ function renderIntro(){
   const city = d.city ? `of the City of ${d.city}` : "";
   const prov = d.prov ? `in the Province of ${d.prov}` : "";
 
+  // helpers for this block
+  const sideLabel = (s) => s === "plaintiff" ? "Plaintiff" : (s === "defendant" ? "Defendant" : "");
+  const partyFromSideIndex = (s, i) => {
+    const list = s === "plaintiff" ? (c.plaintiffs || []) : (s === "defendant" ? (c.defendants || []) : []);
+    return Number.isInteger(i) ? list[i] : null;
+    };
+  const article = (w="") => (/^[aeiou]/i.test((w||"").trim()) ? "an" : "a");
+
   let cap = "";
   switch (role) {
     case "plaintiff":
     case "defendant":
       cap = `the ${role}`;
       break;
+
     case "lawyer":
       cap = lawyerCaption(c, d);
       break;
+
     case "officer":
-    case "employee":
-      cap = d.roleDetail ? `the ${d.roleDetail} of a party` : `an ${role} of a party`;
+    case "employee": {
+      const side = (d.roleSide || "").toLowerCase();
+      const sideWord = sideLabel(side); // "Plaintiff" / "Defendant" / ""
+      const party = partyFromSideIndex(side, d.rolePartyIndex);
+      const org = partyName(party);
+
+      if (d.roleDetail && sideWord && org) {
+        cap = `the ${d.roleDetail} of the ${sideWord} ${org}`;
+      } else if (d.roleDetail && org) {
+        cap = `the ${d.roleDetail} of ${org}`;
+      } else if (!d.roleDetail && sideWord && org) {
+        cap = `${article(role)} ${role} of the ${sideWord} ${org}`;
+      } else if (d.roleDetail) {
+        cap = `the ${d.roleDetail} of a party`;
+      } else {
+        cap = `${article(role)} ${role} of a party`;
+      }
       break;
+    }
+
     default:
       cap = d.role ? `the ${d.role}` : "";
   }
@@ -851,15 +879,12 @@ function renderRow(p,total,labels){
       editBtn.onclick=open;
 
       // Optimistic remove: rail chip disappears immediately, then sync
-removeBtn.onclick = () => {
-  const ok = confirm("Remove this exhibit from this paragraph? The underlying file will remain available.");
-  if (!ok) return;
-  // No optimistic DOM changes, no disabling — let removeExhibit() own the flow
-  removeExhibit(p.id, ex.id);
-};
-
-
-
+      removeBtn.onclick = () => {
+        const ok = confirm("Remove this exhibit from this paragraph? The underlying file will remain available.");
+        if (!ok) return;
+        // No optimistic DOM changes, no disabling — let removeExhibit() own the flow
+        removeExhibit(p.id, ex.id);
+      };
 
       actions.append(leftBtn,rightBtn,editBtn,removeBtn);
       chip.append(L,N,actions); strip.insertBefore(chip,addBtn);
@@ -920,6 +945,7 @@ function renderParagraphs(){
   // After rebuild, ensure all open editors show the current labels
   refreshAllEditorChipLabels();
 }
+
 /* ---------- Form 4C backsheet helpers ---------- */
 
 // short title of proceeding: first plaintiff v first defendant
@@ -935,9 +961,6 @@ function shortTitle(c = {}) {
 }
 
 // choose filer block (name/contact to appear on the backsheet)
-// Logic: prefer the lawyer for the deponent’s party/side (if represented); otherwise that party’s own contact.
-// If the deponent is a witness, prefer the chosen side’s lawyer (first represented party) or that side’s first party contact.
-// If the deponent is a lawyer, use that lawyer (from the party records) if available.
 function pickFiler(c = {}, d = {}) {
   const sideList = (side) => side === "plaintiff" ? (c.plaintiffs || []) : (c.defendants || []);
   const lawyerOf = (party) => (party?.represented && party?.lawyer) ? party.lawyer : null;
@@ -1017,7 +1040,6 @@ function pickFiler(c = {}, d = {}) {
     // Use any lawyer on the selected lawyerSide if present; otherwise fallback
     const side = d.lawyerSide || null;
     if (side) {
-      // try to find a party that is represented, and use its lawyer
       const list = sideList(side);
       for (const p of list) {
         if (p?.represented && p?.lawyer) {
@@ -1038,9 +1060,6 @@ function pickFiler(c = {}, d = {}) {
   // default: plaintiffs’ side
   return fallbackFirstSideLawyer("plaintiff");
 }
-
-
-
 
 function renderBacksheet() {
   const c = loadCase();
@@ -1065,8 +1084,7 @@ function renderBacksheet() {
   const plRole = roleLabel("plaintiff", (c.plaintiffs || []).length || 1, isMotion, movingSide);
   const dfRole = roleLabel("defendant", (c.defendants || []).length || 1, isMotion, movingSide);
 
-  const deponentFull = [d.first || "", d.last || ""]
-    .map(s => s.trim()).filter(Boolean).join(" ").trim();
+  const deponentFull = [d.first || "", d.last || ""].map(s => s.trim()).filter(Boolean).join(" ").trim();
 
   const filer = pickFiler(c, d) || {
     type: "party", name: "", firm: "", addr1: "", addr2: "",
@@ -1093,7 +1111,6 @@ function renderBacksheet() {
 
       <!-- NEW: Court file number at the absolute top-right -->
       <div class="bs-file-topline">Court File No.: ${fileNo || ""}</div>
-
 
       <!-- Parties row -->
       <div class="bs-toprow">
@@ -1138,12 +1155,24 @@ function renderBacksheet() {
   `;
 }
 
-
 /* ---------- Init ---------- */
 document.addEventListener("DOMContentLoaded", async ()=>{
   ensureAffidavitId();
 
-  const back=$("#back"); if(back) back.onclick=()=>history.back();
+  // Smart Back: try history, otherwise go to the intro page
+  function smartBack(fallbackHref){
+    try {
+      if (document.referrer &&
+          new URL(document.referrer).origin === location.origin &&
+          history.length > 1) {
+        history.back();
+        return;
+      }
+    } catch(_) {}
+    window.location.href = fallbackHref;
+  }
+  const back = $("#back");
+  if (back) back.onclick = () => smartBack("affidavit-intro.html");
 
   const toggle=$("#schemeToggle"), textEl=$("#schemeText");
   if(toggle){
@@ -1184,7 +1213,6 @@ document.addEventListener("DOMContentLoaded", async ()=>{
 
   renderJurat(); // show blank jurat card
   renderBacksheet();
-
 
   const addEnd=$("#addParaEnd"); if(addEnd) addEnd.onclick=()=>{ addPara(); renderParagraphs(); };
 

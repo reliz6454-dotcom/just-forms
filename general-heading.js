@@ -1,14 +1,21 @@
 // general-heading.js — ordered multi-party with per-party contact + counsel (+ reuse-counsel)
-// Saves to localStorage key "jf_case"
+// Persists to localStorage key "jf_case"
 
 const LS_CASE_KEY = "jf_case";
 
-// tiny helpers
+/* ---------------------------------------
+   Tiny helpers
+----------------------------------------*/
 const val = (id) => (document.getElementById(id)?.value || "").trim();
 function show(el, yes) { if (!el) return; el.hidden = !yes; el.setAttribute("aria-hidden", yes ? "false" : "true"); }
 function radioChecked(id){ const n=document.getElementById(id); return !!(n && n.checked); }
 
-// party display name (company preferred)
+const loadCase = () => { try { return JSON.parse(localStorage.getItem(LS_CASE_KEY) || "null"); } catch { return null; } };
+const saveCase = (obj) => localStorage.setItem(LS_CASE_KEY, JSON.stringify(obj));
+
+/* ---------------------------------------
+   Display helpers
+----------------------------------------*/
 function partyDisplayName(p) {
   if (!p) return "";
   const company = (p.company || "").trim();
@@ -16,7 +23,6 @@ function partyDisplayName(p) {
   return company || person || "";
 }
 
-// build a stable label for a lawyer for dropdown display/identity
 function lawyerDisplay(l) {
   if (!l) return "";
   const name = [l.first || "", l.last || ""].map(s=>s.trim()).filter(Boolean).join(" ");
@@ -38,7 +44,32 @@ function lawyerKey(l) {
 }
 
 /* ---------------------------------------
-   READ A SINGLE PARTY BLOCK (pl|df)
+   Court info (NEW: load/save + populate)
+----------------------------------------*/
+function readCourtFromDom() {
+  return {
+    file: {
+      year:     (document.getElementById("court-file-year")?.value || "").trim(),
+      assigned: (document.getElementById("court-file-assigned")?.value || "").trim(),
+      suffix:   (document.getElementById("court-file-suffix")?.value || "").trim(),
+    },
+    name: (document.getElementById("name-of-court")?.value || "").trim(),
+    proceedingPlace: (document.getElementById("proceeding-place")?.value || "").trim(),
+  };
+}
+
+function fillCourtIntoDom(court) {
+  if (!court) return;
+  const set = (id, v) => { const n = document.getElementById(id); if (n) n.value = v || ""; };
+  set("court-file-year",     court.file?.year);
+  set("court-file-assigned", court.file?.assigned);
+  set("court-file-suffix",   court.file?.suffix);
+  set("name-of-court",       court.name);
+  set("proceeding-place",    court.proceedingPlace);
+}
+
+/* ---------------------------------------
+   Read one party block (pl|df)
 ----------------------------------------*/
 function readPartyNode(node, cls) {
   if (!node) return null;
@@ -63,11 +94,7 @@ function readPartyNode(node, cls) {
     const useExisting = !!node.querySelector(`.${cls}-use-existing-lawyer`)?.checked;
     const sel = node.querySelector(`.${cls}-lawyer-select`);
     if (useExisting && sel && sel.value) {
-      try {
-        lawyer = JSON.parse(sel.value);
-      } catch {
-        lawyer = null;
-      }
+      try { lawyer = JSON.parse(sel.value); } catch { lawyer = null; }
     } else {
       lawyer = {
         firm:     node.querySelector(`.${cls}-law-firm`)?.value.trim()     || "",
@@ -94,7 +121,7 @@ function readPartyNode(node, cls) {
 }
 
 /* ---------------------------------------
-   VALIDATION
+   Validation
 ----------------------------------------*/
 function requireIdentity(node, cls, partyLabel, requiredStrict) {
   const first   = node.querySelector(`.${cls}-first`)?.value.trim()   || "";
@@ -194,7 +221,7 @@ function requireLawyerIfRepresented(node, cls, partyLabel) {
 }
 
 /* ---------------------------------------
-   COLLECT/POPULATE REUSABLE LAWYERS
+   Collect / populate reusable lawyers
 ----------------------------------------*/
 function collectLawyers(sideCls) {
   const rootSel = sideCls === "pl" ? "#plaintiff-information" : "#defendant-information";
@@ -274,7 +301,7 @@ function populateLawyerSelects(sideCls) {
 }
 
 /* ---------------------------------------
-   READ LISTS
+   Read lists
 ----------------------------------------*/
 function readPartyList(rootSelector, firstSelector, extraSelector, cls) {
   const out = [];
@@ -289,32 +316,164 @@ function readPartyList(rootSelector, firstSelector, extraSelector, cls) {
     extraWrap.querySelectorAll(".party-block").forEach(row => out.push(readPartyNode(row, cls)));
   }
 
+  // keep only rows with a valid identity
   return out.filter(p => p && ( (p.company && p.company.trim()) || ((p.first && p.first.trim()) && (p.last && p.last.trim())) ));
 }
 
 /* ---------------------------------------
-   DOM Helpers for population
+   DOM helpers for population & cloning
 ----------------------------------------*/
-const loadCase = () => {
-  try { return JSON.parse(localStorage.getItem(LS_CASE_KEY) || "null"); }
-  catch { return null; }
-};
-const set = (root, sel, v) => { const n = root.querySelector(sel); if (n) n.value = v || ""; };
-const setChk = (root, sel, on) => { const n = root.querySelector(sel); if (n) n.checked = !!on; };
+function clearPartyRow(row, cls) {
+  row.querySelectorAll(`.${cls}-first, .${cls}-last, .${cls}-company, .${cls}-addr1, .${cls}-addr2, .${cls}-city, .${cls}-prov, .${cls}-postal, .${cls}-phone, .${cls}-email, .${cls}-law-firm, .${cls}-law-first, .${cls}-law-last, .${cls}-law-addr1, .${cls}-law-addr2, .${cls}-law-city, .${cls}-law-prov, .${cls}-law-postal, .${cls}-law-phone, .${cls}-law-email, .${cls}-law-license`).forEach(i => { i.value = ""; });
+  row.querySelectorAll(`.${cls}-represented, .${cls}-use-existing-lawyer`).forEach(i => { i.checked = false; });
+  const sel = row.querySelector(`.${cls}-lawyer-select`);
+  if (sel) sel.innerHTML = `<option value="">— select —</option>`;
+}
+
+function fillPartyRow(row, cls, data) {
+  const setVal = (selector, v) => { const n = row.querySelector(selector); if (n) n.value = v || ""; };
+  const setChk = (selector, on) => { const n = row.querySelector(selector); if (n) n.checked = !!on; };
+
+  setVal(`.${cls}-first`, data.first);
+  setVal(`.${cls}-last`,  data.last);
+  setVal(`.${cls}-company`, data.company);
+
+  setVal(`.${cls}-addr1`, data.contact?.addr1);
+  setVal(`.${cls}-addr2`, data.contact?.addr2);
+  setVal(`.${cls}-city`,  data.contact?.city);
+  setVal(`.${cls}-prov`,  data.contact?.prov);
+  setVal(`.${cls}-postal`,data.contact?.postal);
+  setVal(`.${cls}-phone`, data.contact?.phone);
+  setVal(`.${cls}-email`, data.contact?.email);
+
+  setChk(`.${cls}-represented`, data.represented);
+
+  // lawyer (either existing selection or inline)
+  const sel = row.querySelector(`.${cls}-lawyer-select`);
+  if (data.represented) {
+    const l = data.lawyer || null;
+    if (sel) {
+      sel.innerHTML = `<option value="">— select —</option>`;
+      if (l) {
+        const opt = document.createElement("option");
+        opt.textContent = lawyerDisplay(l);
+        opt.value = JSON.stringify(l);
+        sel.appendChild(opt);
+        sel.value = opt.value;
+      }
+    }
+    if (l) {
+      setVal(`.${cls}-law-firm`, l.firm);
+      setVal(`.${cls}-law-first`, l.first);
+      setVal(`.${cls}-law-last`,  l.last);
+      setVal(`.${cls}-law-addr1`, l.addr1);
+      setVal(`.${cls}-law-addr2`, l.addr2);
+      setVal(`.${cls}-law-city`,  l.city);
+      setVal(`.${cls}-law-prov`,  l.prov);
+      setVal(`.${cls}-law-postal`,l.postal);
+      setVal(`.${cls}-law-phone`, l.phone);
+      setVal(`.${cls}-law-email`, l.email);
+      setVal(`.${cls}-law-license`, l.license);
+    }
+  } else {
+    if (sel) sel.innerHTML = `<option value="">— select —</option>`;
+  }
+}
+
+function clonePartyRow(side) {
+  const isPl = side === "pl";
+  const rootSel  = isPl ? "#plaintiff-information" : "#defendant-information";
+  const firstSel = isPl ? ".party-first" : ".def-party-first";
+  const extraSel = isPl ? "#extra-plaintiffs" : "#extra-defendants";
+  const cls      = isPl ? "pl" : "df";
+
+  const root = document.querySelector(rootSel);
+  const first = root?.querySelector(firstSel);
+  const extra = root?.querySelector(extraSel);
+  if (!root || !first || !extra) return null;
+
+  const row = first.cloneNode(true);
+  row.classList.remove("party-first");
+  row.classList.remove("def-party-first");
+  row.classList.add("party-block");
+
+  clearPartyRow(row, cls);
+  extra.appendChild(row);
+
+  // keep any dynamic selects in sync
+  populateLawyerSelects(cls);
+
+  return row;
+}
+
+function ensurePartyRowsFromData(side, list) {
+  const isPl = side === "pl";
+  const rootSel  = isPl ? "#plaintiff-information" : "#defendant-information";
+  const firstSel = isPl ? ".party-first" : ".def-party-first";
+  const extraSel = isPl ? "#extra-plaintiffs" : "#extra-defendants";
+  const cls      = isPl ? "pl" : "df";
+
+  const root = document.querySelector(rootSel);
+  const first = root?.querySelector(firstSel);
+  const extra = root?.querySelector(extraSel);
+  if (!root || !first || !extra) return;
+
+  if (list.length === 0) {
+    clearPartyRow(first, cls);
+    extra.querySelectorAll(".party-block").forEach(n => n.remove());
+    return;
+  }
+
+  fillPartyRow(first, cls, list[0]);
+
+  const existing = [...extra.querySelectorAll(".party-block")];
+  const need = Math.max(0, list.length - 1);
+
+  for (let i = existing.length; i < need; i++) clonePartyRow(side);
+
+  const rows = [...extra.querySelectorAll(".party-block")];
+  rows.forEach((row, idx) => fillPartyRow(row, cls, list[idx + 1]));
+
+  if (rows.length > need) rows.slice(need).forEach(n => n.remove());
+
+  populateLawyerSelects(cls);
+}
 
 /* ---------------------------------------
-   MAIN DOMContentLoaded
+   Main
 ----------------------------------------*/
 document.addEventListener("DOMContentLoaded", () => {
-  // ✅ FIRST AND ONLY declaration of "form"
-  const form = document.querySelector("form");
-  if (!form) return;
+  // Optional Back button (if present)
+  const backBtn = document.getElementById("back");
+  if (backBtn) {
+    backBtn.onclick = () => {
+      try {
+        if (document.referrer &&
+            new URL(document.referrer).origin === location.origin &&
+            history.length > 1) return history.back();
+      } catch(_) {}
+      window.location.href = "index.html";
+    };
+  }
 
-  // Motion block toggle
+  // Wire "Add another …" buttons — accept either set of IDs to be resilient
+  const addPl = document.getElementById("add-plaintiff") || document.getElementById("add-plaintiff-initial");
+  const addDf = document.getElementById("add-defendant") || document.getElementById("add-defendant-initial");
+  if (addPl) addPl.addEventListener("click", (e) => { e.preventDefault(); clonePartyRow("pl"); });
+  if (addDf) addDf.addEventListener("click", (e) => { e.preventDefault(); clonePartyRow("df"); });
+
+  // Populate from storage (court + parties)
+  const data = loadCase() || {};
+  fillCourtIntoDom(data?.court);
+  const plaintiffs = Array.isArray(data.plaintiffs) ? data.plaintiffs : [];
+  const defendants = Array.isArray(data.defendants) ? data.defendants : [];
+  ensurePartyRowsFromData("pl", plaintiffs);
+  ensurePartyRowsFromData("df", defendants);
+
+  // Motion UI (if present)
   const motionYes = document.getElementById("motion-yes");
   const motionNo  = document.getElementById("motion-no");
   const motionBox = document.getElementById("motion-fields");
-
   function syncMotionUI(){
     const isYes = radioChecked("motion-yes");
     show(motionBox, isYes);
@@ -324,311 +483,39 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
   [motionYes, motionNo].forEach(r => r && r.addEventListener("change", syncMotionUI));
-  syncMotionUI();
+  if (motionBox) syncMotionUI();
 
-  /* ---------------------------------------
-     Helpers to wire representation
-  ----------------------------------------*/
-  function wireRepresentationBlock(block, cls){
-    const cb = block.querySelector(`.${cls}-represented`);
-    const panel = block.querySelector(".lawyer-fields");
-    const manualWrap = block.querySelector(".manual-lawyer-fields");
-    const reuseCb = block.querySelector(`.${cls}-use-existing-lawyer`);
-    const selectWrap = block.querySelector(".existing-lawyer-select");
-    const select = block.querySelector(`.${cls}-lawyer-select`);
+  // Submit → collect & save jf_case → go to intro page
+  const form = document.querySelector("form");
+  if (!form) return;
 
-    const syncRepresented = () => {
-      show(panel, !!cb?.checked);
-      if (cb?.checked) populateLawyerSelects(cls);
-    };
-
-    const syncReuse = () => {
-      const useExisting = !!reuseCb?.checked;
-      show(selectWrap, useExisting);
-      show(manualWrap, !useExisting);
-      if (useExisting) populateLawyerSelects(cls);
-    };
-
-    cb?.addEventListener("change", syncRepresented);
-    reuseCb?.addEventListener("change", syncReuse);
-    select?.addEventListener("change", () => {});
-
-    const manualInputs = block.querySelectorAll([
-      `.${cls}-law-firm`,
-      `.${cls}-law-first`,
-      `.${cls}-law-last`,
-      `.${cls}-law-addr1`,
-      `.${cls}-law-addr2`,
-      `.${cls}-law-city`,
-      `.${cls}-law-prov`,
-      `.${cls}-law-postal`,
-      `.${cls}-law-phone`,
-      `.${cls}-law-email`,
-      `.${cls}-law-license`,
-    ].join(","));
-    manualInputs.forEach(inp => inp.addEventListener("input", () => populateLawyerSelects(cls)));
-
-    syncRepresented();
-    syncReuse();
-  }
-
-  /* ---------------------------------------
-     Build each party block dynamically
-  ----------------------------------------*/
-  function wireSide(side){
-    const isPl = side === "pl";
-    const firstBlock = document.querySelector(isPl ? "#plaintiff-information .party-first" : "#defendant-information .def-party-first");
-    const addFirst   = document.getElementById(isPl ? "add-plaintiff-initial" : "add-defendant-initial");
-    const extraWrap  = document.getElementById(isPl ? "extra-plaintiffs" : "extra-defendants");
-    const tpl        = document.getElementById(isPl ? "plaintiff-row-template" : "defendant-row-template");
-    const MAX = 5;
-
-    if (!firstBlock || !addFirst || !extraWrap || !tpl) return;
-
-    function createExtraRow() {
-      const node = tpl.content.firstElementChild.cloneNode(true);
-      wireRepresentationBlock(node, side);
-
-      node.querySelector(".remove-party-btn")?.addEventListener("click", () => {
-        node.remove(); updateButtons();
-        populateLawyerSelects(side);
-      });
-      node.querySelector(".add-more")?.addEventListener("click", () => addExtra());
-
-      return node;
-    }
-
-    function addExtra() {
-      const total = 1 + extraWrap.children.length;
-      if (total >= MAX) return;
-      const row = createExtraRow();
-      extraWrap.appendChild(row);
-      updateButtons();
-      populateLawyerSelects(side);
-    }
-
-    function updateButtons() {
-      const total = 1 + extraWrap.children.length;
-      addFirst.disabled = (total >= MAX) || (extraWrap.children.length > 0);
-
-      const extras = Array.from(extraWrap.children);
-      extras.forEach((row, idx) => {
-        const add = row.querySelector(".add-more");
-        if (add) add.disabled = (idx !== extras.length - 1) || (total >= MAX);
-      });
-    }
-
-    wireRepresentationBlock(firstBlock, side);
-    addFirst.addEventListener("click", () => addExtra());
-    updateButtons();
-
-    return { firstBlock, extraWrap, addExtra };
-  }
-
-  const wirePl = wireSide("pl");
-  const wireDf = wireSide("df");
-
-  /* ---------------------------------------
-     Populate from saved jf_case (prefill + rebuild rows)
-  ----------------------------------------*/
-  function populatePartyInto(block, cls, party){
-    if (!block || !party) return;
-    set(block, `.${cls}-first`,   party.first || "");
-    set(block, `.${cls}-last`,    party.last || "");
-    set(block, `.${cls}-company`, party.company || "");
-
-    const c = party.contact || {};
-    set(block, `.${cls}-addr1`,  c.addr1 || "");
-    set(block, `.${cls}-addr2`,  c.addr2 || "");
-    set(block, `.${cls}-city`,   c.city  || "");
-    set(block, `.${cls}-prov`,   c.prov  || "");
-    set(block, `.${cls}-postal`, c.postal|| "");
-    set(block, `.${cls}-phone`,  c.phone || "");
-    set(block, `.${cls}-email`,  c.email || "");
-
-    setChk(block, `.${cls}-represented`, !!party.represented);
-    // ensure UI visible before filling
-    block.querySelector(`.${cls}-represented`)?.dispatchEvent(new Event("change"));
-
-    if (party.represented) {
-      // We will always fill manual fields (simpler & reliable)
-      const reuse = block.querySelector(`.${cls}-use-existing-lawyer`);
-      if (reuse) { reuse.checked = false; reuse.dispatchEvent(new Event("change")); }
-
-      const L = party.lawyer || {};
-      set(block, `.${cls}-law-firm`,    L.firm    || "");
-      set(block, `.${cls}-law-first`,   L.first   || "");
-      set(block, `.${cls}-law-last`,    L.last    || "");
-      set(block, `.${cls}-law-addr1`,   L.addr1   || "");
-      set(block, `.${cls}-law-addr2`,   L.addr2   || "");
-      set(block, `.${cls}-law-city`,    L.city    || "");
-      set(block, `.${cls}-law-prov`,    L.prov    || "");
-      set(block, `.${cls}-law-postal`,  L.postal  || "");
-      set(block, `.${cls}-law-phone`,   L.phone   || "");
-      set(block, `.${cls}-law-email`,   L.email   || "");
-      set(block, `.${cls}-law-license`, L.license || "");
-    }
-  }
-
-  function populateFromSaved(){
-    const data = loadCase();
-    if (!data) return;
-
-    // Court
-    const courtName  = document.getElementById("name-of-court");
-    const commencedAt= document.getElementById("proceeding-place");
-    if (courtName)   courtName.value   = (data.courtName || "");
-    if (commencedAt) commencedAt.value = (data.commencedAt || "");
-
-    const cf = data.courtFile || {};
-    const y = document.getElementById("court-file-year");
-    const a = document.getElementById("court-file-assigned");
-    const s = document.getElementById("court-file-suffix");
-    if (y) y.value = cf.year || "";
-    if (a) a.value = cf.assign || "";
-    if (s) s.value = cf.suffix || "";
-
-    // Motion
-    const isMotion = !!(data.motion && data.motion.isMotion);
-    const movingSide = data.motion ? data.motion.movingSide : null;
-    const mYes = document.getElementById("motion-yes");
-    const mNo  = document.getElementById("motion-no");
-    if (mYes && mNo) {
-      mYes.checked = isMotion; mNo.checked = !isMotion;
-      syncMotionUI();
-      if (isMotion) {
-        const mp = document.getElementById("moving-plaintiff");
-        const md = document.getElementById("moving-defendant");
-        if (movingSide === "plaintiff" && mp) mp.checked = true;
-        if (movingSide === "defendant" && md) md.checked = true;
-      }
-    }
-
-    // Plaintiffs
-    const pls = Array.isArray(data.plaintiffs) ? data.plaintiffs : [];
-    if (pls.length && wirePl) {
-      populatePartyInto(wirePl.firstBlock, "pl", pls[0]);
-      for (let i = 1; i < Math.min(pls.length, 5); i++) {
-        const row = wirePl.addExtra();
-        // addExtra appends and returns nothing; we need the last child to fill
-        const node = document.getElementById("extra-plaintiffs")?.lastElementChild;
-        populatePartyInto(node, "pl", pls[i]);
-      }
-    }
-
-    // Defendants
-    const dfs = Array.isArray(data.defendants) ? data.defendants : [];
-    if (dfs.length && wireDf) {
-      populatePartyInto(wireDf.firstBlock, "df", dfs[0]);
-      for (let i = 1; i < Math.min(dfs.length, 5); i++) {
-        const row = wireDf.addExtra();
-        const node = document.getElementById("extra-defendants")?.lastElementChild;
-        populatePartyInto(node, "df", dfs[i]);
-      }
-    }
-
-    // refresh lawyer selects post-fill (so any manual lawyers are visible as options if user flips the toggle)
-    populateLawyerSelects("pl");
-    populateLawyerSelects("df");
-  }
-
-  // Run population now that wiring exists
-  populateFromSaved();
-
-  /* ---------------------------------------
-     ✅ Submit → validate and save jf_case (overwrite)
-  ----------------------------------------*/
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     if (!form.reportValidity()) return;
 
-    const courtName  = val("name-of-court");
-    const commencedAt = val("proceeding-place"); // NEW
-    const year       = val("court-file-year");
-    const assign     = val("court-file-assigned");
-    const suffix     = val("court-file-suffix");
+    const plList = readPartyList("#plaintiff-information", ".party-first", "#extra-plaintiffs", "pl");
+    const dfList = readPartyList("#defendant-information", ".def-party-first", "#extra-defendants", "df");
 
-    // identity validation helpers
-    function getSideNodes(rootSelector, firstSelector, extraSelector) {
-      const root  = document.querySelector(rootSelector);
-      const first = root?.querySelector(firstSelector) || null;
-      const extras= root ? Array.from(root.querySelectorAll(`${extraSelector} .party-block`)) : [];
-      return { first, extras };
-    }
+    // Validate identity on first rows (strict)
+    const plRoot = document.querySelector("#plaintiff-information");
+    const dfRoot = document.querySelector("#defendant-information");
+    const plFirst = plRoot?.querySelector(".party-first");
+    const dfFirst = dfRoot?.querySelector(".def-party-first");
+    if (plFirst && !requireIdentity(plFirst, "pl", "Plaintiff (first row)", true)) return;
+    if (dfFirst && !requireIdentity(dfFirst, "df", "Defendant (first row)", true)) return;
 
-    const plNodes = getSideNodes("#plaintiff-information", ".party-first", "#extra-plaintiffs");
-    const dfNodes = getSideNodes("#defendant-information", ".def-party-first", "#extra-defendants");
+    // Optional: require contact on first rows
+    // if (plFirst && !requireContact(plFirst, "pl", "Plaintiff (first row)")) return;
+    // if (dfFirst && !requireContact(dfFirst, "df", "Defendant (first row)")) return;
 
-    if (!requireIdentity(plNodes.first, "pl", "Plaintiff #1", true)) return;
-    for (let i = 0; i < plNodes.extras.length; i++) {
-      if (!requireIdentity(plNodes.extras[i], "pl", `Plaintiff #${i+2}`, false)) return;
-    }
-    if (!requireIdentity(dfNodes.first, "df", "Defendant #1", true)) return;
-    for (let i = 0; i < dfNodes.extras.length; i++) {
-      if (!requireIdentity(dfNodes.extras[i], "df", `Defendant #${i+2}`, false)) return;
-    }
+    const next = loadCase() || {};
+    next.court = readCourtFromDom();   // <-- ensures court info persists
+    next.plaintiffs = plList;
+    next.defendants = dfList;
 
-    const plaintiffs = readPartyList("#plaintiff-information", ".party-first", "#extra-plaintiffs", "pl");
-    const defendants = readPartyList("#defendant-information", ".def-party-first", "#extra-defendants", "df");
-
-    if (!plaintiffs.length || !defendants.length) {
-      alert("Please enter at least one Plaintiff and one Defendant.");
-      return;
-    }
-
-    function checkSide(list, sideLabel, rootSelector, firstSelector, extraSelector, cls) {
-      const root  = document.querySelector(rootSelector);
-      const first = root.querySelector(firstSelector);
-      const extras= root.querySelectorAll(`${extraSelector} .party-block`);
-
-      const nodesInOrder = [first, ...extras];
-      const nodesKept = [];
-      for (const n of nodesInOrder) {
-        const f = n.querySelector(`.${cls}-first`)?.value.trim() || "";
-        const l = n.querySelector(`.${cls}-last`)?.value.trim() || "";
-        const c = n.querySelector(`.${cls}-company`)?.value.trim() || "";
-        if (c || (f && l)) nodesKept.push(n);
-      }
-
-      for (let i = 0; i < list.length; i++) {
-        const p = list[i];
-        const n = nodesKept[i];
-        const who = `${sideLabel} #${i+1} (${partyDisplayName(p) || "Unnamed"})`;
-        if (!requireContact(n, cls, who)) return false;
-        if (!requireLawyerIfRepresented(n, cls, who)) return false;
-      }
-      return true;
-    }
-
-    if (!checkSide(plaintiffs, "Plaintiff", "#plaintiff-information", ".party-first", "#extra-plaintiffs", "pl")) return;
-    if (!checkSide(defendants, "Defendant", "#defendant-information", ".def-party-first", "#extra-defendants", "df")) return;
-
-    const isMotion = radioChecked("motion-yes");
-    let movingSide = null;
-    if (isMotion) {
-      const mp = radioChecked("moving-plaintiff");
-      const md = radioChecked("moving-defendant");
-      if (!mp && !md) {
-        alert("Please select which side is the Moving Party.");
-        document.getElementById("moving-plaintiff")?.focus();
-        return;
-      }
-      movingSide = mp ? "plaintiff" : "defendant";
-    }
-
-    const caseData = {
-      courtName,
-      commencedAt, // NEW
-      courtFile: { year, assign, suffix },
-      plaintiffs,
-      defendants,
-      motion: { isMotion, movingSide }
-    };
-
-    try {
-      localStorage.setItem(LS_CASE_KEY, JSON.stringify(caseData));
-    } catch (err) {
-      console.error("Failed to save case data:", err);
+    try { saveCase(next); }
+    catch (err) {
+      console.error(err);
       alert("Could not save your information in this browser.");
       return;
     }

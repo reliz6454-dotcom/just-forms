@@ -293,6 +293,16 @@ function readPartyList(rootSelector, firstSelector, extraSelector, cls) {
 }
 
 /* ---------------------------------------
+   DOM Helpers for population
+----------------------------------------*/
+const loadCase = () => {
+  try { return JSON.parse(localStorage.getItem(LS_CASE_KEY) || "null"); }
+  catch { return null; }
+};
+const set = (root, sel, v) => { const n = root.querySelector(sel); if (n) n.value = v || ""; };
+const setChk = (root, sel, on) => { const n = root.querySelector(sel); if (n) n.checked = !!on; };
+
+/* ---------------------------------------
    MAIN DOMContentLoaded
 ----------------------------------------*/
 document.addEventListener("DOMContentLoaded", () => {
@@ -411,13 +421,122 @@ document.addEventListener("DOMContentLoaded", () => {
     wireRepresentationBlock(firstBlock, side);
     addFirst.addEventListener("click", () => addExtra());
     updateButtons();
+
+    return { firstBlock, extraWrap, addExtra };
   }
 
-  wireSide("pl");
-  wireSide("df");
+  const wirePl = wireSide("pl");
+  const wireDf = wireSide("df");
 
   /* ---------------------------------------
-     ✅ Submit → validate and save jf_case
+     Populate from saved jf_case (prefill + rebuild rows)
+  ----------------------------------------*/
+  function populatePartyInto(block, cls, party){
+    if (!block || !party) return;
+    set(block, `.${cls}-first`,   party.first || "");
+    set(block, `.${cls}-last`,    party.last || "");
+    set(block, `.${cls}-company`, party.company || "");
+
+    const c = party.contact || {};
+    set(block, `.${cls}-addr1`,  c.addr1 || "");
+    set(block, `.${cls}-addr2`,  c.addr2 || "");
+    set(block, `.${cls}-city`,   c.city  || "");
+    set(block, `.${cls}-prov`,   c.prov  || "");
+    set(block, `.${cls}-postal`, c.postal|| "");
+    set(block, `.${cls}-phone`,  c.phone || "");
+    set(block, `.${cls}-email`,  c.email || "");
+
+    setChk(block, `.${cls}-represented`, !!party.represented);
+    // ensure UI visible before filling
+    block.querySelector(`.${cls}-represented`)?.dispatchEvent(new Event("change"));
+
+    if (party.represented) {
+      // We will always fill manual fields (simpler & reliable)
+      const reuse = block.querySelector(`.${cls}-use-existing-lawyer`);
+      if (reuse) { reuse.checked = false; reuse.dispatchEvent(new Event("change")); }
+
+      const L = party.lawyer || {};
+      set(block, `.${cls}-law-firm`,    L.firm    || "");
+      set(block, `.${cls}-law-first`,   L.first   || "");
+      set(block, `.${cls}-law-last`,    L.last    || "");
+      set(block, `.${cls}-law-addr1`,   L.addr1   || "");
+      set(block, `.${cls}-law-addr2`,   L.addr2   || "");
+      set(block, `.${cls}-law-city`,    L.city    || "");
+      set(block, `.${cls}-law-prov`,    L.prov    || "");
+      set(block, `.${cls}-law-postal`,  L.postal  || "");
+      set(block, `.${cls}-law-phone`,   L.phone   || "");
+      set(block, `.${cls}-law-email`,   L.email   || "");
+      set(block, `.${cls}-law-license`, L.license || "");
+    }
+  }
+
+  function populateFromSaved(){
+    const data = loadCase();
+    if (!data) return;
+
+    // Court
+    const courtName  = document.getElementById("name-of-court");
+    const commencedAt= document.getElementById("proceeding-place");
+    if (courtName)   courtName.value   = (data.courtName || "");
+    if (commencedAt) commencedAt.value = (data.commencedAt || "");
+
+    const cf = data.courtFile || {};
+    const y = document.getElementById("court-file-year");
+    const a = document.getElementById("court-file-assigned");
+    const s = document.getElementById("court-file-suffix");
+    if (y) y.value = cf.year || "";
+    if (a) a.value = cf.assign || "";
+    if (s) s.value = cf.suffix || "";
+
+    // Motion
+    const isMotion = !!(data.motion && data.motion.isMotion);
+    const movingSide = data.motion ? data.motion.movingSide : null;
+    const mYes = document.getElementById("motion-yes");
+    const mNo  = document.getElementById("motion-no");
+    if (mYes && mNo) {
+      mYes.checked = isMotion; mNo.checked = !isMotion;
+      syncMotionUI();
+      if (isMotion) {
+        const mp = document.getElementById("moving-plaintiff");
+        const md = document.getElementById("moving-defendant");
+        if (movingSide === "plaintiff" && mp) mp.checked = true;
+        if (movingSide === "defendant" && md) md.checked = true;
+      }
+    }
+
+    // Plaintiffs
+    const pls = Array.isArray(data.plaintiffs) ? data.plaintiffs : [];
+    if (pls.length && wirePl) {
+      populatePartyInto(wirePl.firstBlock, "pl", pls[0]);
+      for (let i = 1; i < Math.min(pls.length, 5); i++) {
+        const row = wirePl.addExtra();
+        // addExtra appends and returns nothing; we need the last child to fill
+        const node = document.getElementById("extra-plaintiffs")?.lastElementChild;
+        populatePartyInto(node, "pl", pls[i]);
+      }
+    }
+
+    // Defendants
+    const dfs = Array.isArray(data.defendants) ? data.defendants : [];
+    if (dfs.length && wireDf) {
+      populatePartyInto(wireDf.firstBlock, "df", dfs[0]);
+      for (let i = 1; i < Math.min(dfs.length, 5); i++) {
+        const row = wireDf.addExtra();
+        const node = document.getElementById("extra-defendants")?.lastElementChild;
+        populatePartyInto(node, "df", dfs[i]);
+      }
+    }
+
+    // refresh lawyer selects post-fill (so any manual lawyers are visible as options if user flips the toggle)
+    populateLawyerSelects("pl");
+    populateLawyerSelects("df");
+  }
+
+  // Run population now that wiring exists
+  populateFromSaved();
+
+  /* ---------------------------------------
+     ✅ Submit → validate and save jf_case (overwrite)
   ----------------------------------------*/
   form.addEventListener("submit", (e) => {
     e.preventDefault();

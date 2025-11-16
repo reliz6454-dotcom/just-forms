@@ -440,30 +440,33 @@ const ExhibitChip = Node.create({
   },
 });
 
-/* --- SmartListExit v3: Backspace/Delete exit list like Enter (ZWSP + chips aware) --- */
+
+
+/* --- SmartListExit v4: escape lists on empty item or at hard start --- */
 const SMART_KEY = new PluginKey("smartListExit");
 
 const SmartListExit = Extension.create({
   name: "smartListExit",
-  priority: 'highest',
+  priority: "highest",
 
   addKeyboardShortcuts() {
     const stripZ = (s) => (s || "").replace(/\u200B/g, "").trim();
 
     const paraAtSel = (state) => {
       const parent = state.selection.$from.parent;
-      return parent?.type?.name === 'paragraph' ? parent : null;
+      return parent?.type?.name === "paragraph" ? parent : null;
     };
 
     const paraIsEffectivelyEmpty = (para) => {
       if (!para) return false;
       if (para.childCount === 0) return true;
+
       let hasReal = false;
-      para.forEach(ch => {
+      para.forEach((ch) => {
         if (ch.isText) {
           if (stripZ(ch.text).length) hasReal = true;
-        } else if (ch.type?.name === 'exhibitChip') {
-          // neutral — chips don't make the item "non-empty"
+        } else if (ch.type?.name === "exhibitChip") {
+          // chips don't make the item "non-empty"
         } else {
           hasReal = true;
         }
@@ -471,24 +474,41 @@ const SmartListExit = Extension.create({
       return !hasReal;
     };
 
-    const inAnyList = (editor) => (
-      editor.isActive('listItem') || editor.isActive('orderedList') || editor.isActive('bulletList')
-    );
+    const inAnyList = (editor) =>
+      editor.isActive("listItem") ||
+      editor.isActive("orderedList") ||
+      editor.isActive("bulletList");
 
-    const exitEmptyListItem = (editor) => {
+    const exitEmptyOrHardStart = (editor) => {
       const { state } = editor;
       if (!inAnyList(editor)) return false;
+
+      const { $from } = state.selection;
       const para = paraAtSel(state);
-      if (!paraIsEffectivelyEmpty(para)) return false;
+
+      const empty = paraIsEffectivelyEmpty(para);
+      const atStart = $from.parentOffset === 0; // caret at very start of the item
+
+      // Only exit if the line is effectively empty OR the caret is at the start
+      if (!empty && !atStart) return false;
 
       let changed = false;
-      while (editor.isActive('listItem')) {
-        const ok = editor.commands.liftListItem('listItem');
+
+      // Lift out of listItem container(s)
+      while (editor.isActive("listItem")) {
+        const ok = editor.commands.liftListItem("listItem");
         if (!ok) break;
         changed = true;
       }
+
+      // Extra lift out of list wrappers if needed
       let guard = 16;
-      while (guard-- > 0 && (editor.isActive('orderedList') || editor.isActive('bulletList') || editor.isActive('listItem'))) {
+      while (
+        guard-- > 0 &&
+        (editor.isActive("orderedList") ||
+          editor.isActive("bulletList") ||
+          editor.isActive("listItem"))
+      ) {
         if (!editor.can().lift()) break;
         if (!editor.commands.lift()) break;
         changed = true;
@@ -503,16 +523,17 @@ const SmartListExit = Extension.create({
 
     return {
       Backspace: ({ editor }) => {
-        if (exitEmptyListItem(editor)) return true;
-        return false;
+        if (exitEmptyOrHardStart(editor)) return true;
+        return false; // fall back to default behavior
       },
       Delete: ({ editor }) => {
-        if (exitEmptyListItem(editor)) return true;
+        if (exitEmptyOrHardStart(editor)) return true;
         return false;
       },
     };
   },
 });
+
 
 /* ---------- TipTap editors per paragraph ---------- */
 const EDITORS = new Map();
@@ -553,7 +574,12 @@ function createEditor(mount, p, labels){
     extensions: [
       SmartListExit,
       OrderedList, BulletList, ListItem, ListKeymap,
-      StarterKit,
+      // IMPORTANT CHANGE: disable StarterKit's internal lists so we only use the explicit ones above
+      StarterKit.configure({
+        bulletList: false,
+        orderedList: false,
+        listItem: false,
+      }),
       Underline,
       ExhibitChip,
     ],
@@ -758,11 +784,11 @@ async function onMetaSave(){
 
 /* ---------- Paragraph row (TipTap-only) ---------- */
 function buildToolbar(p){
-  const tb=elx("div",{className:"rte-toolbar"});
+  const tb = elx("div",{className:"rte-toolbar"});
   tb.dataset.pid = p.id;
 
   const btn = (t, a, title) => {
-    const b = elx("button",{type:"button",innerText:t,title:title||t});
+    const b = elx("button",{type:"button",innerText:t,title:title || t});
     b.dataset.action = a;
     return b;
   };
@@ -773,24 +799,54 @@ function buildToolbar(p){
     elx("span",{className:"sep"}), btn("→","indent","Indent"), btn("←","outdent","Outdent"),
     elx("span",{className:"sep"}), btn("Clear","clear","Clear formatting")
   );
-  tb.addEventListener("click",(e)=>{
-    const a=e.target?.dataset?.action;
-    if(!a) return;
-    const ed=EDITORS.get(p.id); if(!ed) return;
-    const chain=ed.chain().focus();
-    switch(a){
-      case "bold": chain.toggleBold().run(); break;
-      case "italic": chain.toggleItalic().run(); break;
-      case "underline": chain.toggleUnderline().run(); break;
-      case "bullet": chain.toggleBulletList().run(); break;
-      case "ordered": chain.toggleOrderedList().run(); break;
-      case "indent": chain.sinkListItem("listItem").run(); break;
-      case "outdent": chain.liftListItem("listItem").run(); break;
-      case "clear": chain.unsetAllMarks().clearNodes().run(); break;
+
+  // IMPORTANT: keep focus/selection inside the editor when clicking toolbar buttons
+  tb.addEventListener("mousedown", (e) => {
+    const target = e.target;
+    if (target && target.closest("button")) {
+      e.preventDefault(); // stop the button from taking focus away from the editor
     }
   });
+
+  tb.addEventListener("click",(e)=>{
+    const a = e.target?.dataset?.action;
+    if (!a) return;
+    e.preventDefault(); // extra safety
+
+    const ed = EDITORS.get(p.id);
+    if (!ed) return;
+
+    const chain = ed.chain().focus();
+    switch(a){
+      case "bold":     chain.toggleBold().run(); break;
+      case "italic":   chain.toggleItalic().run(); break;
+      case "underline":chain.toggleUnderline().run(); break;
+      case "bullet":   chain.toggleBulletList().run(); break;
+      case "ordered":  chain.toggleOrderedList().run(); break;
+           case "indent":
+        // Only indent if we're inside a list item
+        if (ed.isActive("listItem")) {
+          chain.sinkListItem("listItem").run();
+        }
+        break;
+
+      case "outdent":
+        if (ed.isActive("listItem")) {
+          // First try to lift the list item one level
+          if (!chain.liftListItem("listItem").run()) {
+            // If that fails (already top-level) try a generic lift
+            chain.lift().run();
+          }
+        }
+        break;
+
+      case "clear":    chain.unsetAllMarks().clearNodes().run(); break;
+    }
+  });
+
   return tb;
 }
+
 
 function renderRow(p,total,labels){
   const row=elx("div",{className:"row"});
@@ -1000,7 +1056,7 @@ function pickFiler(c = {}, d = {}) {
       const party = list[d.rolePartyIndex] || list[0] || null;
       if (party) {
         const L = lawyerOf(party);
-        return L ? makeLawyerRecord(L) : makePartyRecord(party);
+        return makeLawyerRecord(L) || makePartyRecord(party);
       }
       return fallbackFirstSideLawyer(side);
     }

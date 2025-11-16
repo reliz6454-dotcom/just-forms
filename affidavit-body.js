@@ -794,53 +794,85 @@ function buildToolbar(p){
   };
 
   tb.append(
-    btn("B","bold","Bold"), btn("i","italic","Italic"), btn("U","underline","Underline"),
-    elx("span",{className:"sep"}), btn("•","bullet","Toggle bulleted list"), btn("a.","ordered","Toggle a./b./c. list"),
-    elx("span",{className:"sep"}), btn("→","indent","Indent"), btn("←","outdent","Outdent"),
-    elx("span",{className:"sep"}), btn("Clear","clear","Clear formatting")
+    btn("B","bold","Bold"),
+    btn("i","italic","Italic"),
+    btn("U","underline","Underline"),
+    elx("span",{className:"sep"}),
+    btn("•","bullet","Toggle bulleted list"),
+    btn("a.","ordered","Toggle a./b./c. list"),
+    elx("span",{className:"sep"}),
+    btn("→","indent","Indent"),
+    btn("←","outdent","Outdent"),
+    elx("span",{className:"sep"}),
+    btn("Clear","clear","Clear formatting")
   );
 
-  // IMPORTANT: keep focus/selection inside the editor when clicking toolbar buttons
+  // Keep focus/selection inside the editor when clicking toolbar buttons
   tb.addEventListener("mousedown", (e) => {
     const target = e.target;
     if (target && target.closest("button")) {
-      e.preventDefault(); // stop the button from taking focus away from the editor
+      // prevent the button from stealing focus from the editor
+      e.preventDefault();
     }
   });
 
   tb.addEventListener("click",(e)=>{
     const a = e.target?.dataset?.action;
     if (!a) return;
-    e.preventDefault(); // extra safety
+    e.preventDefault();
 
     const ed = EDITORS.get(p.id);
     if (!ed) return;
 
     const chain = ed.chain().focus();
+
     switch(a){
-      case "bold":     chain.toggleBold().run(); break;
-      case "italic":   chain.toggleItalic().run(); break;
-      case "underline":chain.toggleUnderline().run(); break;
-      case "bullet":   chain.toggleBulletList().run(); break;
-      case "ordered":  chain.toggleOrderedList().run(); break;
-           case "indent":
-        // Only indent if we're inside a list item
+      case "bold":
+        chain.toggleBold().run();
+        break;
+
+      case "italic":
+        chain.toggleItalic().run();
+        break;
+
+      case "underline":
+        chain.toggleUnderline().run();
+        break;
+
+      case "bullet":
+        chain.toggleBulletList().run();
+        break;
+
+      case "ordered":
+        chain.toggleOrderedList().run();
+        break;
+
+      case "indent":
         if (ed.isActive("listItem")) {
+          // in a list → deepen list level
           chain.sinkListItem("listItem").run();
+        } else {
+          // NOT in a list → indent as blockquote (no bullets)
+          chain.toggleBlockquote().run();
         }
         break;
 
       case "outdent":
         if (ed.isActive("listItem")) {
-          // First try to lift the list item one level
+          // in a list → lift list item one level
           if (!chain.liftListItem("listItem").run()) {
-            // If that fails (already top-level) try a generic lift
+            // if already top-level, try a generic lift
             chain.lift().run();
           }
+        } else if (ed.isActive("blockquote")) {
+          // NOT in a list but inside a blockquote → remove indent
+          chain.toggleBlockquote().run();
         }
         break;
 
-      case "clear":    chain.unsetAllMarks().clearNodes().run(); break;
+      case "clear":
+        chain.unsetAllMarks().clearNodes().run();
+        break;
     }
   });
 

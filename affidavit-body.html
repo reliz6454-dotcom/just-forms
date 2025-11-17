@@ -15,9 +15,17 @@
       <!-- Top toolbar -->
       <div class="toolbar">
         <button id="back">◀ Back</button>
-        <div>
-          <button id="exportTxt">Export Affidavit (TXT)</button>
-          <button id="exportPdf">Export Combined (PDF – stub)</button>
+        <div class="export-group">
+          <button id="exportTxt">Affidavit (TXT)</button>
+
+          <label class="append-back-label">
+            <input type="checkbox" id="appendBackTxt">
+            Append backpage (recommended if filing without exhibits)
+          </label>
+
+          <button id="exportAffPdf">Affidavit (PDF)</button>
+          <button id="exportExhPdf">Exhibits Package (PDF)</button>
+          <button id="exportFullPdf">Full Package (PDF)</button>
         </div>
       </div>
 
@@ -64,10 +72,6 @@
     </section>
   </main>
 
-  <!-- JS modules -->
-  <script type="module" src="affidavit-body.js"></script>
-  <script type="module" src="affidavit-export.js"></script>
-
   <!-- Exhibit Scheme Modal -->
   <div id="schemeModal" class="modal" aria-hidden="true">
     <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="schemeTitle">
@@ -98,5 +102,12 @@
       </div>
     </div>
   </div>
+
+  <!-- PDF-lib (global PDFLib used by affidavit-export.js) -->
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+
+  <!-- App modules -->
+  <script type="module" src="affidavit-body.js"></script>
+  <script type="module" src="affidavit-export.js"></script>
 </body>
 </html>

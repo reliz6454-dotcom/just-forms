@@ -378,21 +378,39 @@ function buildAffidavitText(includeBacksheet, swornDateUpper) {
     lines.push("");
   });
 
-  // Simple jurat text note
+  // Full Form 4D-style jurat (3 options)
   lines.push("JURAT", "");
+  lines.push("Sworn or Affirmed before me:");
+  lines.push("   (select one): [ ] in person   OR   [ ] by video conference");
+  lines.push("");
+  lines.push("Complete if affidavit is being sworn or affirmed in person:");
   lines.push(
-    "Sworn or Affirmed before me:",
-    "   (select one): [ ] in person   OR   [ ] by video conference",
-    "",
-    "In person:",
-    "   at the (City, Town, etc.) of ______________________",
-    "   in the (County, Regional Municipality, etc.) of ______________________,",
-    "   on (date) ______________________.",
-    "",
-    "Signature of Commissioner: ____________________________",
-    "Signature of Deponent:    ____________________________",
-    ""
+    "   at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, on (date) ______________________."
   );
+  lines.push(
+    "   Signature of Commissioner (or as may be): ____________________________    Signature of Deponent: ____________________________"
+  );
+  lines.push("");
+  lines.push("Use one of the following if affidavit is being sworn or affirmed by video conference:");
+  lines.push("");
+  lines.push("Complete if deponent and commissioner are in same city or town:");
+  lines.push(
+    "   by ______________________ (deponent\u2019s name) at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, before me on ______________________ (date) in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely."
+  );
+  lines.push("   Commissioner for Taking Affidavits (or as may be)");
+  lines.push(
+    "   Signature of Commissioner (or as may be): ____________________________    Signature of Deponent: ____________________________"
+  );
+  lines.push("");
+  lines.push("Complete if deponent and commissioner are not in same city or town:");
+  lines.push(
+    "   by ______________________ (deponent\u2019s name) of (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, before me at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, on ______________________ (date) in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely."
+  );
+  lines.push("   Commissioner for Taking Affidavits (or as may be)");
+  lines.push(
+    "   Signature of Commissioner (or as may be): ____________________________    Signature of Deponent: ____________________________"
+  );
+  lines.push("");
 
   if (includeBacksheet) {
     const shortTitle = (() => {
@@ -693,6 +711,153 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
     }
   }
 
+  function drawSignatureRow(captionLeft, captionRight) {
+    // leave some space before signatures
+    ensureSpace(3, 12);
+
+    const lineY = y;
+    const colWidth = contentWidth / 2;
+    const lineWidth = colWidth * 0.8;
+
+    const leftX = marginLeft + (colWidth - lineWidth) / 2;
+    const rightX = marginLeft + colWidth + (colWidth - lineWidth) / 2;
+
+    // lines
+    page.drawLine({
+      start: { x: leftX, y: lineY },
+      end: { x: leftX + lineWidth, y: lineY },
+      thickness: 0.5,
+      color: rgb(0, 0, 0)
+    });
+    page.drawLine({
+      start: { x: rightX, y: lineY },
+      end: { x: rightX + lineWidth, y: lineY },
+      thickness: 0.5,
+      color: rgb(0, 0, 0)
+    });
+
+    const textSize = 12;
+    const captionY = lineY - textSize - 2;
+
+    const leftTextWidth = fontReg.widthOfTextAtSize(captionLeft, textSize);
+    const rightTextWidth = fontReg.widthOfTextAtSize(captionRight, textSize);
+
+    page.drawText(captionLeft, {
+      x: leftX + (lineWidth - leftTextWidth) / 2,
+      y: captionY,
+      size: textSize,
+      font: fontReg
+    });
+    page.drawText(captionRight, {
+      x: rightX + (lineWidth - rightTextWidth) / 2,
+      y: captionY,
+      size: textSize,
+      font: fontReg
+    });
+
+    // move below captions with extra double-space
+    y = captionY - lineGap - (textSize / 2);
+  }
+
+function drawJurat() {
+  ensureSpace(22, 12);
+
+  // 1 — Header with checkboxes
+  drawWrappedLines(
+    ["Sworn or Affirmed before me:"],
+    { font: fontReg, size: 12, align: "left" }
+  );
+  // Use ASCII [ ] instead of ☐ so WinAnsi can encode it
+  drawWrappedLines(
+    ["(select one): [ ] in person   OR   [ ] by video conference"],
+    { font: fontReg, size: 12, align: "left" }
+  );
+  drawWrappedLines([""], { font: fontReg, size: 12 });
+
+  // ------------------------------------------------------------
+  // 2 — In-person block
+  // ------------------------------------------------------------
+
+  // Bold header
+  drawWrappedLines(
+    ["Complete if affidavit is being sworn or affirmed in person:"],
+    { font: fontBold, size: 12 }
+  );
+
+  // Main line
+  drawWrappedLines(
+    [
+      "at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________,  on (date) _____________."
+    ],
+    { font: fontReg, size: 12 }
+  );
+
+  drawSignatureRow(
+    "Signature of Commissioner (or as may be)",
+    "Signature of Deponent"
+  );
+
+  // ------------------------------------------------------------
+  // 3 — Remote heading
+  // ------------------------------------------------------------
+
+  drawWrappedLines(
+    ["Use one of the following if affidavit is being sworn or affirmed by video conference:"],
+    { font: fontReg, size: 12 }
+  );
+  drawWrappedLines([""], { font: fontReg, size: 12 });
+
+  // ------------------------------------------------------------
+  // 4 — SAME CITY block
+  // ------------------------------------------------------------
+
+  drawWrappedLines(
+    ["Complete if deponent and commissioner are in same city or town:"],
+    { font: fontBold, size: 12 }
+  );
+
+  drawWrappedLines(
+    [
+      "by ____________ (deponent’s name) at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, before me on ____________ (date)",
+      "in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely.",
+      "Commissioner for Taking Affidavits (or as may be)"
+    ],
+    { font: fontReg, size: 12 }
+  );
+
+  drawSignatureRow(
+    "Signature of Commissioner (or as may be)",
+    "Signature of Deponent"
+  );
+
+  // ------------------------------------------------------------
+  // 5 — DIFFERENT CITY block — WITH REQUESTED EXTRA SPACE ABOVE
+  // ------------------------------------------------------------
+
+  drawWrappedLines([""], { font: fontReg, size: 12 }); // extra blank line
+
+  drawWrappedLines(
+    ["Complete if deponent and commissioner are not in same city or town:"],
+    { font: fontBold, size: 12 }
+  );
+
+  drawWrappedLines(
+    [
+      "by ____________ (deponent’s name) of (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________,",
+      "before me at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________,  on ____________ (date)",
+      "in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely.",
+      "Commissioner for Taking Affidavits (or as may be)"
+    ],
+    { font: fontReg, size: 12 }
+  );
+
+  drawSignatureRow(
+    "Signature of Commissioner (or as may be)",
+    "Signature of Deponent"
+  );
+}
+
+
   // --- Layout: heading ---
 
   // Court File No. (right aligned)
@@ -774,24 +939,24 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
 
   const city = d.city ? `of the City of ${d.city}` : "";
   const prov = d.prov ? `in the Province of ${d.prov}` : "";
-  let cap = "";
+  let capIntro = "";
   switch (role) {
     case "plaintiff":
     case "defendant":
-      cap = `the ${role}`;
+      capIntro = `the ${role}`;
       break;
     case "lawyer":
-      cap = "the lawyer for a party";
+      capIntro = "the lawyer for a party";
       break;
     case "officer":
     case "employee":
-      cap = d.roleDetail ? `the ${d.roleDetail} of a party` : `an ${role} of a party`;
+      capIntro = d.roleDetail ? `the ${d.roleDetail} of a party` : `an ${role} of a party`;
       break;
     default:
-      cap = d.role ? `the ${d.role}` : "";
+      capIntro = d.role ? `the ${d.role}` : "";
   }
   const oathText = oath === "swear" ? "MAKE OATH AND SAY:" : "AFFIRM:";
-  const opening = [title ? `I, ${title}` : "I,", city, prov, cap || null]
+  const opening = [title ? `I, ${title}` : "I,", city, prov, capIntro || null]
     .filter(Boolean)
     .join(", ");
   const openingLine = `${opening}, ${oathText}`;
@@ -869,26 +1034,8 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
     });
   }
 
-  // --- Jurat block at end (will spill to next page if needed) ---
-
-  const juratLines = [
-    "Sworn or Affirmed before me:",
-    "   (select one): [ ] in person   OR   [ ] by video conference",
-    "",
-    "In person:",
-    "   at the (City, Town, etc.) of ______________________",
-    "   in the (County, Regional Municipality, etc.) of ______________________,",
-    "   on (date) ______________________.",
-    "",
-    "Signature of Commissioner: ____________________________",
-    "Signature of Deponent:    ____________________________"
-  ];
-
-  drawWrappedLines(juratLines, {
-    font: fontReg,
-    size: 12,
-    align: "left"
-  });
+  // --- Jurat block at end (full Form 4D style) ---
+  drawJurat();
 
   return pdfDoc;
 }

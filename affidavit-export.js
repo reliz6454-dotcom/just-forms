@@ -1303,49 +1303,64 @@ async function buildExhibitsPdfDoc() {
 
   const c = exLoadCase();
   const d = c.deponent || {};
-  const deponentName = [d.first || "", d.last || ""]
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .join(" ")
-    .trim();
+
+  // --- Deponent name logic: mirror affidavit-body.js renderIntro ---
+  const nameOf = (p) =>
+    [p?.first, p?.last].filter(Boolean).join(" ").trim();
+
+  const role = (d.role || "").toLowerCase();
+
+  let deponentName =
+    nameOf(d) ||
+    (role === "plaintiff"  && c.plaintiffs?.[0]
+      ? nameOf(c.plaintiffs[0])
+      : (role === "defendant" && c.defendants?.[0]
+          ? nameOf(c.defendants[0])
+          : ""));
+
+  // Fallback if we *still* don't have a name
+  if (!deponentName) {
+    deponentName = "the deponent";
+  }
 
   const pdfDoc = await PDFDocument.create();
   const fonts = await embedSerifFonts(pdfDoc);
-  const fontReg = fonts.regular;
+  const fontReg  = fonts.regular;
   const fontBold = fonts.bold;
 
   for (const ex of exhibits) {
     const coverPage = pdfDoc.addPage();
     const { width, height } = coverPage.getSize();
-    const marginLeft = 72;
-    const marginRight = 72;
+    const marginLeft   = 72;
+    const marginRight  = 72;
     const contentWidth = width - marginLeft - marginRight;
-    const lineGap = 12;
+    const lineGap      = 12;
 
     let y = height - 144;
 
-    // "Exhibit A"
-    y = drawLines(coverPage, [`Exhibit ${ex.label}`], {
-      font: fontBold,
-      size: 12,
-      x: marginLeft,
-      yStart: y,
+    // --- FIRST LINE: Exhibit "A" (with quotes) ---
+    const exhibitTitle = `Exhibit "${ex.label}"`;
+
+    y = drawLines(coverPage, [exhibitTitle], {
+      font:  fontBold,
+      size:  12,
+      x:     marginLeft,
+      yStart:y,
       width: contentWidth,
       lineGap,
       align: "center"
     });
 
-    // "This is exhibit A"
-    const desc =
-      ex.meta?.shortDesc ||
-      `This is exhibit ${ex.label} to the affidavit of ${deponentName || "the deponent"}.`;
+    // --- SECOND LINE: "This is exhibit "A" to the affidavit of Robin Yates." ---
+    // (no longer using meta shortDesc; always use this pattern)
+    const desc = `This is exhibit "${ex.label}" to the affidavit of ${deponentName}.`;
 
     y -= 12;
     y = drawLines(coverPage, [desc], {
-      font: fontReg,
-      size: 12,
-      x: marginLeft,
-      yStart: y,
+      font:  fontReg,
+      size:  12,
+      x:     marginLeft,
+      yStart:y,
       width: contentWidth,
       lineGap,
       align: "center"
@@ -1356,21 +1371,23 @@ async function buildExhibitsPdfDoc() {
     const sigWidth = 240;
     const sigX = marginLeft + (contentWidth - sigWidth) / 2;
     const sigY = y;
+
     coverPage.drawLine({
       start: { x: sigX, y: sigY },
-      end: { x: sigX + sigWidth, y: sigY },
+      end:   { x: sigX + sigWidth, y: sigY },
       thickness: 0.5,
       color: rgb(0, 0, 0)
     });
+
     y -= 18;
     drawLines(
       coverPage,
       ["Signature of Commissioner (or as may be)"],
       {
-        font: fontReg,
-        size: 12,
-        x: marginLeft,
-        yStart: y,
+        font:  fontReg,
+        size:  12,
+        x:     marginLeft,
+        yStart:y,
         width: contentWidth,
         lineGap,
         align: "center"
@@ -1379,7 +1396,7 @@ async function buildExhibitsPdfDoc() {
 
     // Append exhibit file pages, if any
     if (ex.blob && ex.type === "application/pdf") {
-      const bytes = new Uint8Array(await ex.blob.arrayBuffer());
+      const bytes  = new Uint8Array(await ex.blob.arrayBuffer());
       const srcDoc = await PDFDocument.load(bytes);
       const copied = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
       for (const p of copied) pdfDoc.addPage(p);
@@ -1393,13 +1410,16 @@ async function buildExhibitsPdfDoc() {
       }
       const imgPage = pdfDoc.addPage();
       const { width: pw, height: ph } = imgPage.getSize();
-      const scale = Math.min((pw - 72 * 2) / img.width, (ph - 72 * 2) / img.height);
+      const scale = Math.min(
+        (pw - 72 * 2) / img.width,
+        (ph - 72 * 2) / img.height
+      );
       const w = img.width * scale;
       const h = img.height * scale;
       imgPage.drawImage(img, {
         x: (pw - w) / 2,
         y: (ph - h) / 2,
-        width: w,
+        width:  w,
         height: h
       });
     }
@@ -1408,26 +1428,139 @@ async function buildExhibitsPdfDoc() {
   return pdfDoc;
 }
 
+
 /* --------------------------
  *  PDF: Backsheet page
  * -------------------------- */
+// Choose filer (party or lawyer) for backsheet, mirroring affidavit-body.js logic
+function pickFilerForBacksheet(c = {}, d = {}) {
+  const sideList = (side) =>
+    side === "plaintiff" ? (c.plaintiffs || []) : (c.defendants || []);
+
+  const lawyerOf = (party) =>
+    party?.represented && party?.lawyer ? party.lawyer : null;
+
+  const makePartyRecord = (party) => ({
+    type: "party",
+    name:
+      (party?.company || "").trim() ||
+      [party?.first || "", party?.last || ""]
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(" ")
+        .trim() ||
+      "Party",
+    addr1: party?.contact?.addr1 || "",
+    addr2: party?.contact?.addr2 || "",
+    city:  party?.contact?.city  || "",
+    prov:  party?.contact?.prov  || "",
+    postal:party?.contact?.postal|| "",
+    phone: party?.contact?.phone || "",
+    email: party?.contact?.email || "",
+    license: ""
+  });
+
+  const makeLawyerRecord = (lawyer) => ({
+    type: "lawyer",
+    name:
+      [lawyer?.first || "", lawyer?.last || ""]
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(" ")
+        .trim() || "Lawyer",
+    firm: (lawyer?.firm || "").trim(),
+    addr1: lawyer?.addr1 || "",
+    addr2: lawyer?.addr2 || "",
+    city:  lawyer?.city  || "",
+    prov:  lawyer?.prov  || "",
+    postal:lawyer?.postal|| "",
+    phone: lawyer?.phone || "",
+    email: lawyer?.email || "",
+    license: (lawyer?.license || "").trim()
+  });
+
+  const role = (d.role || "").toLowerCase();
+
+  const fallbackFirstSideLawyer = (side) => {
+    const list = sideList(side);
+    for (const p of list) {
+      const L = lawyerOf(p);
+      if (L) return makeLawyerRecord(L);
+    }
+    if (list[0]) return makePartyRecord(list[0]);
+    return null;
+  };
+
+  // Deponent is a party
+  if (role === "plaintiff" || role === "defendant") {
+    const side = role;
+    const idx  = Number.isInteger(d.selfPartyIndex) ? d.selfPartyIndex : 0;
+    const list = sideList(side);
+    const party = list[idx] || list[0] || null;
+    if (party) {
+      const L = lawyerOf(party);
+      return L ? makeLawyerRecord(L) : makePartyRecord(party);
+    }
+    return fallbackFirstSideLawyer(side);
+  }
+
+  // Officer / employee of a party
+  if (role === "officer" || role === "employee") {
+    const side = d.roleSide || null;
+    if (side != null && Number.isInteger(d.rolePartyIndex)) {
+      const list = sideList(side);
+      const party = list[d.rolePartyIndex] || list[0] || null;
+      if (party) {
+        const L = lawyerOf(party);
+        return L ? makeLawyerRecord(L) : makePartyRecord(party);
+      }
+      return fallbackFirstSideLawyer(side);
+    }
+    return fallbackFirstSideLawyer("plaintiff");
+  }
+
+  // Deponent is a lawyer
+  if (role === "lawyer") {
+    const side = d.lawyerSide || null;
+    if (side) {
+      const list = sideList(side);
+      for (const p of list) {
+        const L = lawyerOf(p);
+        if (L) return makeLawyerRecord(L);
+      }
+      if (list[0]) return makePartyRecord(list[0]);
+    }
+    return fallbackFirstSideLawyer("plaintiff");
+  }
+
+  // Witness: fall back to first side’s lawyer/party
+  if (role === "witness") {
+    const side = d.witnessSide || "plaintiff";
+    return fallbackFirstSideLawyer(side);
+  }
+
+  // Default: plaintiff side
+  return fallbackFirstSideLawyer("plaintiff");
+}
 
 async function buildBacksheetPdfDoc(swornDateUpper) {
   await ensurePdfLib();
   const pdfDoc = await PDFDocument.create();
-  const fonts = await embedSerifFonts(pdfDoc);
-  const fontReg = fonts.regular;
+  const fonts  = await embedSerifFonts(pdfDoc);
+  const fontReg  = fonts.regular;
   const fontBold = fonts.bold;
 
   const c = exLoadCase();
   const d = c.deponent || {};
 
-  const gh = buildGH(c);
-  const where = (c.commencedAt || "").trim();
-  const court = gh.l2;
+  const gh     = buildGH(c);
+  const where  = (c.commencedAt || "").trim();
+  const court  = gh.l2;
   const fileNo = gh.fileNo;
 
-  const namesList = (arr) => (Array.isArray(arr) ? arr : []).map(partyName).filter(Boolean);
+  const namesList = (arr) =>
+    (Array.isArray(arr) ? arr : []).map(partyName).filter(Boolean);
+
   const etAlName = (arr) => {
     const ns = namesList(arr);
     if (ns.length <= 1) return ns[0] || "";
@@ -1436,7 +1569,7 @@ async function buildBacksheetPdfDoc(swornDateUpper) {
 
   const plNames = etAlName(c.plaintiffs || []);
   const dfNames = etAlName(c.defendants || []);
-  const isMotion = !!(c.motion && c.motion.isMotion);
+  const isMotion   = !!(c.motion && c.motion.isMotion);
   const movingSide = c.motion ? c.motion.movingSide : null;
 
   const plRole = roleFor(
@@ -1458,65 +1591,190 @@ async function buildBacksheetPdfDoc(swornDateUpper) {
     .join(" ")
     .trim();
 
+  // Filer info (party or lawyer) — same logic as preview via helper
+  const filer =
+    pickFilerForBacksheet(c, d) || {
+      type: "party",
+      name: "",
+      firm: "",
+      addr1: "",
+      addr2: "",
+      city: "",
+      prov: "",
+      postal: "",
+      phone: "",
+      email: "",
+      license: ""
+    };
+
+  const nameLine =
+    filer.type === "lawyer"
+      ? [filer.name, filer.firm].filter(Boolean).join(", ")
+      : filer.name;
+
+  const addrLines = [];
+  const addrLine1 = [filer.addr1, filer.addr2].filter(Boolean).join(", ");
+  const addrLine2 = [filer.city, filer.prov, filer.postal]
+    .filter(Boolean)
+    .join(", ");
+  if (addrLine1) addrLines.push(addrLine1);
+  if (addrLine2) addrLines.push(addrLine2);
+
+  const contactLine =
+    (filer.email ? `E: ${filer.email}` : "") +
+    (filer.email && filer.phone ? "   " : "") +
+    (filer.phone ? `M: ${filer.phone}` : "");
+
+  const licenseLine =
+    filer.type === "lawyer" && filer.license
+      ? `LSO No.: ${filer.license}`
+      : "";
+
   const page = pdfDoc.addPage();
   const { width, height } = page.getSize();
-  const marginLeft = 72;
-  const marginRight = 72;
+  const marginLeft   = 72;
+  const marginRight  = 72;
   const contentWidth = width - marginLeft - marginRight;
-  const lineGap = 10;
+  const lineGap      = 10;
+  const bottomMargin = 72;
+
+  // Centre X for the vertical slab line + right-hand body column
+  const centerX = marginLeft + contentWidth / 2;
 
   let y = height - 72;
 
-  // Court file no. top-right
+  // Court file no. — top right
   y = drawLines(page, [`Court File No.: ${fileNo || ""}`], {
-    font: fontReg,
-    size: 12,
-    x: marginLeft,
-    yStart: y,
+    font:  fontReg,
+    size:  12,
+    x:     marginLeft,
+    yStart:y,
     width: contentWidth,
     lineGap,
     align: "right"
   });
 
-  // Parties row
+  // ---------- Parties row: left vs right + "-and-" in the middle ----------
+
   y -= 24;
-  const partiesLines = [
-    `${plNames}`,
-    `${plRole}`,
-    "",
-    `${dfNames}`,
-    `${dfRole}`
-  ];
-  drawLines(page, partiesLines, {
-    font: fontReg,
-    size: 12,
-    x: marginLeft,
-    yStart: y,
-    width: contentWidth,
-    lineGap,
-    align: "center"
+  const rowTopY = y;
+
+  const textSize = 12;
+
+  // Left (Plaintiff) block
+  const plNameY = rowTopY;
+  const plRoleY = plNameY - (textSize + lineGap);
+
+  page.drawText(plNames || "", {
+    x:    marginLeft,
+    y:    plNameY,
+    size: textSize,
+    font: fontReg
+  });
+  page.drawText(plRole || "", {
+    x:    marginLeft,
+    y:    plRoleY,
+    size: textSize,
+    font: fontReg
   });
 
-  // Court + commenced at
-  y -= 5 * (12 + lineGap);
-  y = drawLines(page, [court], {
-    font: fontReg,
-    size: 12,
-    x: marginLeft,
-    yStart: y,
-    width: contentWidth,
-    lineGap,
-    align: "center"
+  // Right (Defendant) block
+  const dfNameY = rowTopY;
+  const dfRoleY = dfNameY - (textSize + lineGap);
+
+  const dfNameWidth = fontReg.widthOfTextAtSize(dfNames || "", textSize);
+  const dfRoleWidth = fontReg.widthOfTextAtSize(dfRole || "", textSize);
+
+  const rightEdge = marginLeft + contentWidth;
+
+  page.drawText(dfNames || "", {
+    x:    rightEdge - dfNameWidth,
+    y:    dfNameY,
+    size: textSize,
+    font: fontReg
   });
+  page.drawText(dfRole || "", {
+    x:    rightEdge - dfRoleWidth,
+    y:    dfRoleY,
+    size: textSize,
+    font: fontReg
+  });
+
+  // "-and-" centred between the two sides
+  const andText  = "-and-";
+  const andWidth = fontReg.widthOfTextAtSize(andText, textSize);
+  const andX     = marginLeft + (contentWidth - andWidth) / 2;
+  const andY     = plNameY - (textSize + lineGap) / 2;
+
+  page.drawText(andText, {
+    x:    andX,
+    y:    andY,
+    size: textSize,
+    font: fontReg
+  });
+
+  // Move y below the parties row
+  y = dfRoleY - (textSize + lineGap);
+
+  // ---------- Horizontal rule under parties ----------
+
+  y -= 8;
+  page.drawLine({
+    start: { x: marginLeft,            y },
+    end:   { x: marginLeft + contentWidth, y },
+    thickness: 0.75,
+    color: rgb(0, 0, 0)
+  });
+
+  // Body top (used for vertical slab)
+  const bodyTopY = y - 20;
+  y = bodyTopY;
+
+  // ---------- Body: all main text in the RIGHT half (to the right of the centre line) ----------
+
+  const bodyX     = centerX + 10;                  // start a bit to the right of the vertical line
+  const bodyWidth = contentWidth / 2 - 10;         // right half width
+
+// Court name split into two lines:
+// 1) "ONTARIO" italic
+// 2) "SUPERIOR COURT OF JUSTICE" regular
+
+const COURT_TOP = "ONTARIO";
+const COURT_BOTTOM = "SUPERIOR COURT OF JUSTICE";
+
+// Line 1 - italic
+y = drawLines(page, [COURT_TOP], {
+  font:  fonts.italic,       // <— italic font
+  size:  12,
+  x:     bodyX,
+  yStart:y,
+  width: bodyWidth,
+  lineGap,
+  align: "center"
+});
+
+// Line 2 - regular
+y = drawLines(page, [COURT_BOTTOM], {
+  font:  fontReg,
+  size:  12,
+  x:     bodyX,
+  yStart:y,
+  width: bodyWidth,
+  lineGap,
+  align: "center"
+});
+
+
+  // Proceeding commenced at ...
   y = drawLines(
     page,
     [`Proceeding commenced at ${where || "(place)"}`],
     {
-      font: fontReg,
-      size: 12,
-      x: marginLeft,
-      yStart: y,
-      width: contentWidth,
+      font:  fontReg,
+      size:  12,
+      x:     bodyX,
+      yStart:y,
+      width: bodyWidth,
       lineGap,
       align: "center"
     }
@@ -1524,15 +1782,16 @@ async function buildBacksheetPdfDoc(swornDateUpper) {
 
   // Affidavit title and sworn line
   y -= 2 * (12 + lineGap);
+
   y = drawLines(
     page,
     [`AFFIDAVIT OF ${deponentFull.toUpperCase()}`],
     {
-      font: fontBold,
-      size: 12,
-      x: marginLeft,
-      yStart: y,
-      width: contentWidth,
+      font:  fontBold,
+      size:  12,
+      x:     bodyX,
+      yStart:y,
+      width: bodyWidth,
       lineGap,
       align: "center"
     }
@@ -1541,18 +1800,51 @@ async function buildBacksheetPdfDoc(swornDateUpper) {
   const swornLine = swornDateUpper
     ? `SWORN ${swornDateUpper}`
     : "SWORN _____________________";
+
   y = drawLines(page, [swornLine], {
-    font: fontBold,
-    size: 12,
-    x: marginLeft,
-    yStart: y,
-    width: contentWidth,
+    font:  fontBold,
+    size:  12,
+    x:     bodyX,
+    yStart:y,
+    width: bodyWidth,
     lineGap,
     align: "center"
   });
 
+  // ---------- Filer block (bottom right area, still in the right half) ----------
+
+  y -= 3 * (12 + lineGap);
+
+  const filerLines = [];
+  if (nameLine) filerLines.push(nameLine);
+  filerLines.push(...addrLines);
+  if (contactLine) filerLines.push(contactLine);
+  if (licenseLine) filerLines.push(licenseLine);
+
+  if (filerLines.length) {
+    y = drawLines(page, filerLines, {
+      font:  fontReg,
+      size:  12,
+      x:     bodyX,
+      yStart:y,
+      width: bodyWidth,
+      lineGap,
+      align: "left"
+    });
+  }
+
+  // ---------- Vertical “slab” line centred in the body ----------
+
+  page.drawLine({
+    start: { x: centerX, y: bodyTopY + 10 },
+    end:   { x: centerX, y: bottomMargin },
+    thickness: 1,
+    color: rgb(0, 0, 0)
+  });
+
   return pdfDoc;
 }
+
 
 /* --------------------------
  *  Sworn date helpers (modal)

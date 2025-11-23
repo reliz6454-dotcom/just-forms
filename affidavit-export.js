@@ -1089,20 +1089,47 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
     align: "right"
   });
 
-  // Court name centred
-  drawWrappedLines([gh.l2], {
-    font: fontReg,
-    size: 12,
-    align: "center",
-    extraGapAfter: 6
-  });
+  // Court name centred, split into two lines:
+  // Top line: first word (e.g., "ONTARIO") in italics
+  // Bottom line: remainder (e.g., "SUPERIOR COURT OF JUSTICE") in regular font
+  {
+    const courtName = gh.l2 || "";
+    const [courtTop, ...courtRestParts] = courtName.split(/\s+/);
+    const courtBottom = courtRestParts.join(" ");
 
-  // BETWEEN:
-  drawWrappedLines([gh.l3], {
-    font: fontBold,
+    if (courtTop) {
+      drawWrappedLines([courtTop], {
+        font: fontItalic,    // "ONTARIO" italic
+        size: 12,
+        align: "center"
+      });
+    }
+
+    if (courtBottom) {
+      drawWrappedLines([courtBottom], {
+        font: fontReg,       // "SUPERIOR COURT OF JUSTICE" regular
+        size: 12,
+        align: "center",
+        extraGapAfter: 6
+      });
+    } else {
+      // If there is no second line, still preserve the vertical gap
+      drawWrappedLines([""], {
+        font: fontReg,
+        size: 12,
+        align: "left",
+        extraGapAfter: 6
+      });
+    }
+  }
+
+  // BETWEEN: not bold, with spaces between each letter
+  drawWrappedLines(["B E T W E E N :"], {
+    font: fontReg,
     size: 12,
     align: "left"
   });
+
 
   // Plaintiffs / role
   drawWrappedLines([gh.l4], {

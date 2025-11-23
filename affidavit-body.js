@@ -181,19 +181,36 @@ function buildHeading(c={}) {
   return {
     l1: file?`Court File No. ${file}`:"Court File No.",
     l2: (c.courtName||"ONTARIO SUPERIOR COURT OF JUSTICE").trim(),
-    l3: "BETWEEN:", l4: plRaw.length?etAl(plRaw,3):"[Add plaintiffs in the General Heading form]",
+    l3: "B E T W E EN:", l4: plRaw.length?etAl(plRaw,3):"[Add plaintiffs in the General Heading form]",
     l5: roleLabel("plaintiff", plRaw.length||1, isMotion, movingSide),
     l6: "-AND-",
     l7: dfRaw.length?etAl(dfRaw,3):"[Add defendants in the General Heading form]",
     l8: roleLabel("defendant", dfRaw.length||1, isMotion, movingSide),
   };
 }
-function renderHeading(){
-  const gh=buildHeading(loadCase()); const c=$("#heading"); if(!c) return;
-  c.innerHTML=`
+function renderHeading() {
+  const gh = buildHeading(loadCase());
+  const c = $("#heading");
+  if (!c) return;
+
+  // Split the court name into two lines:
+  // "ONTARIO" (top, italic) and the remainder (bottom, non-italic, bold).
+  const courtRaw = (gh.l2 || "").trim();
+  let courtTop = courtRaw;
+  let courtBottom = "";
+
+  if (/^ONTARIO\b/i.test(courtRaw)) {
+    courtTop = "ONTARIO";
+    courtBottom = courtRaw.replace(/^ONTARIO\b\s*/i, "").trim();
+  }
+
+  c.innerHTML = `
     <div class="gh">
       <div class="gh-line gh-file-no">${gh.l1}</div>
-      <div class="gh-line gh-court">${gh.l2}</div>
+      <div class="gh-line gh-court">
+        <span class="gh-court-top">${courtTop}</span>
+        ${courtBottom ? `<span class="gh-court-bottom">${courtBottom}</span>` : ""}
+      </div>
       <div class="gh-line gh-between">${gh.l3}</div>
       <div class="gh-line gh-parties gh-plaintiffs">${gh.l4}</div>
       <div class="gh-line gh-role gh-pl-role">${gh.l5}</div>
@@ -202,6 +219,7 @@ function renderHeading(){
       <div class="gh-line gh-role gh-def-role">${gh.l8}</div>
     </div>`;
 }
+
 function renderIntro(){
   const c = loadCase();
   const d = c.deponent || {};

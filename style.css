@@ -150,8 +150,29 @@ input[type="file"] { padding: 0.5rem; border: 1px solid #ccc; border-radius: 8px
 }
 #heading .gh-line { line-height: 2; margin: 0; display: block; }
 #heading .gh-file-no { text-align: right; }
-#heading .gh-court { text-align: center; font-weight: 700; font-style: italic; text-transform: uppercase; }
-#heading .gh-between { text-align: left; font-weight: 600; }
+#heading .gh-court {
+  text-align: center;
+  text-transform: uppercase;
+}
+
+#heading .gh-court-top {
+  display: block;
+  font-style: italic;
+  font-weight: normal;
+}
+
+#heading .gh-court-bottom {
+  display: block;
+  font-style: normal;
+  font-weight: 700;
+}
+
+#heading .gh-between {
+  text-align: left;
+  font-weight: normal;   /* not bold */
+  letter-spacing: 0.25em; /* ensures spacing looks deliberate */
+}
+
 #heading .gh-parties, #heading .gh-and { text-align: center; }
 #heading .gh-and { letter-spacing: 0.5px; font-weight: 600; }
 #heading .gh-role { text-align: right; }

@@ -12,17 +12,16 @@
 <body>
   <main>
     <section>
-        <!-- Top toolbar -->
+      <!-- Top toolbar -->
       <div class="toolbar">
         <button id="back">◀ Back</button>
         <div>
           <button id="exportTxt">Export Affidavit (TXT)</button>
-          <button id="exportAffPdf">Affidavit (PDF)</button>
-          <button id="exportExhPdf">Exhibits Package (PDF)</button>
-          <button id="exportFullPdf">Full Package (PDF)</button>
+          <button id="exportAffPdf">Export Affidavit (PDF)</button>
+          <button id="exportExhPdf">Export Exhibits Package (PDF)</button>
+          <button id="exportFullPdf">Export Full Package (PDF)</button>
         </div>
       </div>
-
 
       <!-- Live previews -->
       <div class="card" id="heading"></div>
@@ -67,38 +66,46 @@
     </section>
   </main>
 
-      <!-- Export Options Modal -->
-      <div id="exportModal" class="modal" aria-hidden="true">
-        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
-          <h3 id="exportModalTitle">Export options</h3>
+  <!-- Export Options Modal -->
+  <div id="exportModal" class="modal" aria-hidden="true">
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
+      <h3 id="exportModalTitle">Export options</h3>
 
-          <form id="exportForm">
-            <div class="field">
-              <label for="exportDate">Sworn date (optional)</label>
-              <input type="date" id="exportDate" name="exportDate">
-              <div class="mt-6">
-                <label>
-                  <input type="checkbox" id="exportNoDate">
-                  This affidavit has no sworn date yet (I will write it in after export)
-                </label>
-              </div>
-            </div>
-
-            <div class="field">
-              <label>
-                <input type="checkbox" id="exportExcludeBack">
-                Exclude backsheet (Form 4C) from this export
-              </label>
-            </div>
-          </form>
-
-          <div class="modal-actions">
-            <button id="exportCancel" type="button">Cancel</button>
-            <button id="exportConfirm" type="button">Continue</button>
+      <form id="exportForm">
+        <div class="field">
+          <label for="exportDate">Sworn date (optional)</label>
+          <input type="date" id="exportDate" name="exportDate">
+          <div class="mt-6">
+            <label>
+              <input type="checkbox" id="exportNoDate">
+              This affidavit has no sworn date yet (I will write it in after export)
+            </label>
           </div>
         </div>
-      </div>
 
+ <div class="field">
+  <p class="muted">
+    The backsheet (Form 4C) is the last sheet required on every document filed
+    with the court. It sets out essential information such as the court file
+    number, the type of document being filed, and the party or lawyer who is
+    filing it, as required by Rule 4.02(3) of the Rules of Civil Procedure.
+  </p>
+
+  <label>
+    <input type="checkbox" id="exportExcludeBack">
+    Exclude backsheet (Form 4C) from this export
+  </label>
+</div>
+
+
+      </form>
+
+      <div class="modal-actions">
+        <button id="exportCancel" type="button">Cancel</button>
+        <button id="exportConfirm" type="button">Continue</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Exhibit Scheme Modal -->
   <div id="schemeModal" class="modal" aria-hidden="true">
@@ -107,8 +114,14 @@
       <p>How should exhibits be labeled in the exported PDF?</p>
 
       <form id="schemeForm">
-        <label class="radio"><input type="radio" name="scheme" value="letters" checked> Letters (A, B, C…)</label>
-        <label class="radio"><input type="radio" name="scheme" value="numbers"> Numbers (1, 2, 3…)</label>
+        <label class="radio">
+          <input type="radio" name="scheme" value="letters" checked>
+          Letters (A, B, C…)
+        </label>
+        <label class="radio">
+          <input type="radio" name="scheme" value="numbers">
+          Numbers (1, 2, 3…)
+        </label>
       </form>
 
       <div class="modal-actions">

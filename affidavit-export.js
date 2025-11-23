@@ -1583,12 +1583,12 @@ function formatDateUpperFromInput(value) {
  * -------------------------- */
 
 document.addEventListener("DOMContentLoaded", () => {
-  const btnTxt    = $_("#exportTxt");
-  const btnAffPdf = $_("#exportAffPdf");
-  const btnExhPdf = $_("#exportExhPdf");
-  const btnFullPdf= $_("#exportFullPdf");
+  const btnTxt     = $_("#exportTxt");
+  const btnAffPdf  = $_("#exportAffPdf");
+  const btnExhPdf  = $_("#exportExhPdf");
+  const btnFullPdf = $_("#exportFullPdf");
 
-  // New export options modal
+  // Export options modal
   const exportModal       = $_("#exportModal");
   const exportForm        = $_("#exportForm");
   const exportDateInput   = $_("#exportDate");
@@ -1596,6 +1596,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const exportExcludeBack = $_("#exportExcludeBack");
   const exportCancel      = $_("#exportCancel");
   const exportConfirm     = $_("#exportConfirm");
+
+  const excludeBackField = exportExcludeBack
+    ? exportExcludeBack.closest(".field")
+    : null;
 
   let pendingExportKind = null; // "txt" | "aff" | "exh" | "full"
 
@@ -1642,16 +1646,16 @@ document.addEventListener("DOMContentLoaded", () => {
       exportForm.reset();
     }
 
-    // Backside behaviour:
-    // - For TXT / AFF / EXH: default is INCLUDE backsheet (checkbox unchecked)
-    // - For FULL: backsheet is mandatory → disable checkbox
-    if (exportExcludeBack) {
+    // ----- Exclude-backsheet visibility rules -----
+    if (excludeBackField && exportExcludeBack) {
       if (kind === "full") {
-        exportExcludeBack.checked = false;
-        exportExcludeBack.disabled = true;
+        // Full package MUST include the backsheet
+        excludeBackField.style.display = "none";
+        exportExcludeBack.checked = false; // ignored for "full"
       } else {
-        exportExcludeBack.disabled = false;
-        exportExcludeBack.checked = false;
+        // TXT, Affidavit PDF, Exhibits PDF → user may exclude
+        excludeBackField.style.display = "block";
+        exportExcludeBack.checked = false; // default = include backsheet
       }
     }
 
@@ -1671,11 +1675,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function runExport(kind, opts) {
     const { excludeBack, swornUpper } = opts || {};
-    const includeBacksheet = !excludeBack;
+
+    // For "full", backsheet is *always* included.
+    const includeBacksheet = kind === "full" ? true : !excludeBack;
+    const swornForBacksheet = swornUpper || "";
 
     // TXT affidavit
     if (kind === "txt") {
-      const txt = buildAffidavitText(!!includeBacksheet, swornUpper || "");
+      const txt = buildAffidavitText(!!includeBacksheet, swornForBacksheet);
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([txt], { type: "text/plain" }));
       a.download = "Affidavit.txt";
@@ -1687,11 +1694,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // Affidavit-only PDF
     if (kind === "aff") {
       try {
-        const affDoc = await buildAffidavitPdfDoc(swornUpper || "");
+        const affDoc = await buildAffidavitPdfDoc(swornForBacksheet);
         let finalDoc = affDoc;
 
         if (includeBacksheet) {
-          const backDoc = await buildBacksheetPdfDoc(swornUpper || "");
+          const backDoc = await buildBacksheetPdfDoc(swornForBacksheet);
           const full = await PDFDocument.create();
           const affPages = await full.copyPages(affDoc, affDoc.getPageIndices());
           affPages.forEach((p) => full.addPage(p));
@@ -1714,7 +1721,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Exhibits-only PDF (now with optional backsheet)
+    // Exhibits-only PDF (with optional backsheet)
     if (kind === "exh") {
       try {
         const exhDoc = await buildExhibitsPdfDoc();
@@ -1723,7 +1730,7 @@ document.addEventListener("DOMContentLoaded", () => {
         let finalDoc = exhDoc;
 
         if (includeBacksheet) {
-          const backDoc = await buildBacksheetPdfDoc(swornUpper || "");
+          const backDoc = await buildBacksheetPdfDoc(swornForBacksheet);
           const full = await PDFDocument.create();
           const exhPages = await full.copyPages(exhDoc, exhDoc.getPageIndices());
           exhPages.forEach((p) => full.addPage(p));
@@ -1749,7 +1756,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // Full package PDF (affidavit + exhibits + backsheet ALWAYS)
     if (kind === "full") {
       try {
-        const swornForBacksheet = swornUpper || "";
         const affDoc = await buildAffidavitPdfDoc(swornForBacksheet);
         const exhDoc = await buildExhibitsPdfDoc(); // may alert+return null
         const backDoc = await buildBacksheetPdfDoc(swornForBacksheet);
@@ -1822,7 +1828,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (btnExhPdf) {
-    // Exhibits-only now shares the unified modal (sworn date + exclude backsheet)
+    // Exhibits-only now shares the unified modal (date + exclude backsheet)
     btnExhPdf.onclick = () => openExportModal("exh");
   }
 

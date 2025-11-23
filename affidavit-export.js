@@ -153,6 +153,8 @@ function isUL(el) {
   if (dt === "bulletList") return true;
   const cls = el.className || "";
   if (/\bbullet[- ]?list\b/i.test(cls)) return true;
+  const lt = el.getAttribute?.("data-list-type") || "";
+  if (/alpha|decimal/i.test(lt)) return true;
   return false;
 }
 
@@ -395,7 +397,14 @@ function buildAffidavitText(includeBacksheet, swornDateUpper) {
   lines.push("");
   lines.push("Complete if deponent and commissioner are in same city or town:");
   lines.push(
-    "   by ______________________ (deponent\u2019s name) at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, before me on ______________________ (date) in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely."
+    "   by ______________________ (deponent’s name) at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, before me on ______________________ (date)"
+  );
+  // O. Reg line – plain text, separate URL line
+  lines.push(
+    "   in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely."
+  );
+  lines.push(
+    "   (See O. Reg. 431/20 online at https://www.ontario.ca/laws/regulation/r20431.)"
   );
   lines.push("   Commissioner for Taking Affidavits (or as may be)");
   lines.push(
@@ -404,7 +413,13 @@ function buildAffidavitText(includeBacksheet, swornDateUpper) {
   lines.push("");
   lines.push("Complete if deponent and commissioner are not in same city or town:");
   lines.push(
-    "   by ______________________ (deponent\u2019s name) of (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, before me at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, on ______________________ (date) in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely."
+    "   by ______________________ (deponent’s name) of (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, before me at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, on ______________________ (date)"
+  );
+  lines.push(
+    "   in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely."
+  );
+  lines.push(
+    "   (See O. Reg. 431/20 online at https://www.ontario.ca/laws/regulation/r20431.)"
   );
   lines.push("   Commissioner for Taking Affidavits (or as may be)");
   lines.push(
@@ -526,7 +541,7 @@ function exHasAnyExhibits() {
  *  PDF low-level helpers
  * --------------------------- */
 
-const { PDFDocument, rgb } = (window.PDFLib || {});
+const { PDFDocument, rgb, PDFName, PDFString } = (window.PDFLib || {});
 
 async function ensurePdfLib() {
   if (!PDFDocument || !rgb) {
@@ -601,6 +616,36 @@ function drawLines(page, lines, opts) {
   return y;
 }
 
+/* Add clickable link annotation over a text run */
+function addLinkAnnotation(page, pdfDoc, x, y, width, height, url) {
+  if (!pdfDoc || !page || !url || !PDFName || !PDFString) return;
+  try {
+    const context = pdfDoc.context;
+    const linkAnnot = context.obj({
+      Type: PDFName.of("Annot"),
+      Subtype: PDFName.of("Link"),
+      Rect: context.obj([x, y, x + width, y + height]),
+      Border: context.obj([0, 0, 0]),
+      A: context.obj({
+        Type: PDFName.of("Action"),
+        S: PDFName.of("URI"),
+        URI: PDFString.of(url)
+      })
+    });
+
+    const annotsKey = PDFName.of("Annots");
+    let annots = page.node.get(annotsKey);
+    if (!annots) {
+      annots = context.obj([linkAnnot]);
+      page.node.set(annotsKey, annots);
+    } else {
+      annots.push(linkAnnot);
+    }
+  } catch (e) {
+    console.warn("Could not add link annotation", e);
+  }
+}
+
 /* ---------------------------
  *  PDF: affidavit main body
  * --------------------------- */
@@ -611,6 +656,7 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
   const fonts = await embedSerifFonts(pdfDoc);
   const fontReg = fonts.regular;
   const fontBold = fonts.bold;
+  const fontItalic = fonts.italic;
 
   // Initial page + layout constants
   let page = pdfDoc.addPage();
@@ -711,7 +757,7 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
     }
   }
 
-  function drawSignatureRow(captionLeft, captionRight) {
+  function drawSignatureRow(captionLeft, captionRight, italic = false) {
     // leave some space before signatures
     ensureSpace(3, 12);
 
@@ -738,124 +784,336 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
 
     const textSize = 12;
     const captionY = lineY - textSize - 2;
+    const f = italic ? fontItalic : fontReg;
 
-    const leftTextWidth = fontReg.widthOfTextAtSize(captionLeft, textSize);
-    const rightTextWidth = fontReg.widthOfTextAtSize(captionRight, textSize);
+    const leftTextWidth = f.widthOfTextAtSize(captionLeft, textSize);
+    const rightTextWidth = f.widthOfTextAtSize(captionRight, textSize);
 
     page.drawText(captionLeft, {
       x: leftX + (lineWidth - leftTextWidth) / 2,
       y: captionY,
       size: textSize,
-      font: fontReg
+      font: f
     });
     page.drawText(captionRight, {
       x: rightX + (lineWidth - rightTextWidth) / 2,
       y: captionY,
       size: textSize,
-      font: fontReg
+      font: f
     });
 
     // move below captions with extra double-space
     y = captionY - lineGap - (textSize / 2);
   }
 
-function drawJurat() {
-  ensureSpace(22, 12);
+   function drawJurat() {
+    ensureSpace(22, 12);
 
-  // 1 — Header with checkboxes
-  drawWrappedLines(
-    ["Sworn or Affirmed before me:"],
-    { font: fontReg, size: 12, align: "left" }
-  );
-  // Use ASCII [ ] instead of ☐ so WinAnsi can encode it
-  drawWrappedLines(
-    ["(select one): [ ] in person   OR   [ ] by video conference"],
-    { font: fontReg, size: 12, align: "left" }
-  );
-  drawWrappedLines([""], { font: fontReg, size: 12 });
+    const regUrl = "https://www.ontario.ca/laws/regulation/r20431";
+    const linkColor = rgb(0, 0, 1); // blue for hyperlink
 
-  // ------------------------------------------------------------
-  // 2 — In-person block
-  // ------------------------------------------------------------
+    // Helper: draw a left-aligned, wrapped line where text inside (...) is italic
+    function drawBracketLine(text) {
+      const size = 12;
+      const baseFont = fontReg;
+      const italicFont = fontItalic;
+      const maxWidth = contentWidth;
 
-  // Bold header
-  drawWrappedLines(
-    ["Complete if affidavit is being sworn or affirmed in person:"],
-    { font: fontBold, size: 12 }
-  );
+      if (!text || !text.trim()) {
+        // behave like a blank line
+        ensureSpace(1, size);
+        y -= size + lineGap;
+        return;
+      }
 
-  // Main line
-  drawWrappedLines(
-    [
-      "at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________,  on (date) _____________."
-    ],
-    { font: fontReg, size: 12 }
-  );
+      // 1) Split into segments: outside vs inside parentheses
+      const segments = [];
+      let inParen = false;
+      let buf = "";
 
-  drawSignatureRow(
-    "Signature of Commissioner (or as may be)",
-    "Signature of Deponent"
-  );
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (ch === "(" && !inParen) {
+          if (buf) segments.push({ text: buf, italic: false });
+          buf = "(";
+          inParen = true;
+        } else if (ch === ")" && inParen) {
+          buf += ")";
+          segments.push({ text: buf, italic: true });
+          buf = "";
+          inParen = false;
+        } else {
+          buf += ch;
+        }
+      }
+      if (buf) segments.push({ text: buf, italic: inParen });
 
-  // ------------------------------------------------------------
-  // 3 — Remote heading
-  // ------------------------------------------------------------
+      // 2) Break segments into tokens (including spaces), preserving italic flag
+      const tokens = [];
+      for (const seg of segments) {
+        const parts = seg.text.split(/(\s+)/); // keep spaces
+        for (const part of parts) {
+          if (!part) continue;
+          tokens.push({ text: part, italic: seg.italic });
+        }
+      }
 
-  drawWrappedLines(
-    ["Use one of the following if affidavit is being sworn or affirmed by video conference:"],
-    { font: fontReg, size: 12 }
-  );
-  drawWrappedLines([""], { font: fontReg, size: 12 });
+      // 3) Build wrapped lines by measuring token widths
+      const lines = [];
+      let lineTokens = [];
+      let lineWidth = 0;
 
-  // ------------------------------------------------------------
-  // 4 — SAME CITY block
-  // ------------------------------------------------------------
+      const pushLine = () => {
+        if (!lineTokens.length) return;
+        lines.push({ tokens: lineTokens, width: lineWidth });
+        lineTokens = [];
+        lineWidth = 0;
+      };
 
-  drawWrappedLines(
-    ["Complete if deponent and commissioner are in same city or town:"],
-    { font: fontBold, size: 12 }
-  );
+      for (const tok of tokens) {
+        const f = tok.italic ? italicFont : baseFont;
+        const w = f.widthOfTextAtSize(tok.text, size);
 
-  drawWrappedLines(
-    [
-      "by ____________ (deponent’s name) at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, before me on ____________ (date)",
-      "in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely.",
-      "Commissioner for Taking Affidavits (or as may be)"
-    ],
-    { font: fontReg, size: 12 }
-  );
+        if (lineTokens.length && lineWidth + w > maxWidth) {
+          // start a new line before this token
+          pushLine();
+        }
+        lineTokens.push(tok);
+        lineWidth += w;
+      }
+      pushLine();
 
-  drawSignatureRow(
-    "Signature of Commissioner (or as may be)",
-    "Signature of Deponent"
-  );
+      // 4) Draw each line, left-aligned, respecting page breaks
+      for (const line of lines) {
+        ensureSpace(1, size);
+        let drawX = marginLeft;
+        const lineY = y;
 
-  // ------------------------------------------------------------
-  // 5 — DIFFERENT CITY block — WITH REQUESTED EXTRA SPACE ABOVE
-  // ------------------------------------------------------------
+        for (const tok of line.tokens) {
+          const f = tok.italic ? italicFont : baseFont;
+          page.drawText(tok.text, {
+            x: drawX,
+            y: lineY,
+            size,
+            font: f
+          });
+          drawX += f.widthOfTextAtSize(tok.text, size);
+        }
 
-  drawWrappedLines([""], { font: fontReg, size: 12 }); // extra blank line
+        y -= size + lineGap;
+      }
+    }
 
-  drawWrappedLines(
-    ["Complete if deponent and commissioner are not in same city or town:"],
-    { font: fontBold, size: 12 }
-  );
+    // ------------------------------------------------------------
+    // 1 — Header with checkboxes
+    // ------------------------------------------------------------
 
-  drawWrappedLines(
-    [
-      "by ____________ (deponent’s name) of (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________,",
-      "before me at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________,  on ____________ (date)",
-      "in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely.",
-      "Commissioner for Taking Affidavits (or as may be)"
-    ],
-    { font: fontReg, size: 12 }
-  );
+    drawWrappedLines(
+      ["Sworn or Affirmed before me:"],
+      { font: fontItalic, size: 12, align: "left" }
+    );
+    drawWrappedLines(
+      ["(select one): [ ] in person   OR   [ ] by video conference"],
+      { font: fontItalic, size: 12, align: "left" }
+    );
+    drawWrappedLines([""], { font: fontReg, size: 12 });
 
-  drawSignatureRow(
-    "Signature of Commissioner (or as may be)",
-    "Signature of Deponent"
-  );
-}
+    // ------------------------------------------------------------
+    // 2 — In-person block
+    // ------------------------------------------------------------
+
+    // Bold heading
+    drawWrappedLines(
+      ["Complete if affidavit is being sworn or affirmed in person:"],
+      { font: fontBold, size: 12, align: "left" }
+    );
+
+    // Location/date line — with bracketed text italic (City, County, date parts)
+    drawBracketLine(
+      "at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, on (date) ______________________."
+    );
+
+    drawSignatureRow(
+      "Signature of Commissioner (or as may be)",
+      "Signature of Deponent",
+      true // captions italic, as before
+    );
+
+    // ------------------------------------------------------------
+    // 3 — Remote heading
+    // ------------------------------------------------------------
+
+    drawWrappedLines(
+      ["Use one of the following if affidavit is being sworn or affirmed by video conference:"],
+      { font: fontItalic, size: 12, align: "left" }
+    );
+    drawWrappedLines([""], { font: fontReg, size: 12 });
+
+    // ------------------------------------------------------------
+    // 4 — SAME CITY block
+    // ------------------------------------------------------------
+
+    drawWrappedLines(
+      ["Complete if deponent and commissioner are in same city or town:"],
+      { font: fontBold, size: 12, align: "left" }
+    );
+
+    // "by (deponent’s name) at the (City...) ..." — bracketed bits italic
+    drawBracketLine(
+      "by ______________________ (deponent’s name) at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, before me on (date) ______________________"
+    );
+
+    // O. Reg line with clickable, styled link (no italics, no overflow)
+    (function () {
+      const prefix = "in accordance with ";
+      const linkText = "O. Reg. 431/20";
+      const suffix = ", Administering Oath or Declaration Remotely.";
+      const size = 12;
+      const f = fontReg;
+
+      ensureSpace(1, size);
+      const baseX = marginLeft;
+      const textY = y;
+
+      const prefixWidth = f.widthOfTextAtSize(prefix, size);
+      const linkWidth = f.widthOfTextAtSize(linkText, size);
+
+      // prefix (black)
+      page.drawText(prefix, { x: baseX, y: textY, size, font: f });
+
+      // link text (blue, underlined)
+      const linkX = baseX + prefixWidth;
+      page.drawText(linkText, {
+        x: linkX,
+        y: textY,
+        size,
+        font: f,
+        color: linkColor
+      });
+      page.drawLine({
+        start: { x: linkX, y: textY - 2 },
+        end: { x: linkX + linkWidth, y: textY - 2 },
+        thickness: 0.5,
+        color: linkColor
+      });
+
+      // suffix (black)
+      page.drawText(suffix, {
+        x: linkX + linkWidth,
+        y: textY,
+        size,
+        font: f
+      });
+
+      // clickable area over the link text
+      addLinkAnnotation(
+        page,
+        pdfDoc,
+        linkX,
+        textY,
+        linkWidth,
+        size,
+        regUrl
+      );
+
+      y -= size + lineGap;
+    })();
+
+    drawWrappedLines(
+      ["Commissioner for Taking Affidavits (or as may be)"],
+      { font: fontReg, size: 12, align: "left" }
+    );
+
+    drawSignatureRow(
+      "Signature of Commissioner (or as may be)",
+      "Signature of Deponent",
+      true
+    );
+
+    // ------------------------------------------------------------
+    // 5 — DIFFERENT CITY block
+    // ------------------------------------------------------------
+
+    drawWrappedLines([""], { font: fontReg, size: 12 }); // extra blank line
+
+    drawWrappedLines(
+      ["Complete if deponent and commissioner are not in same city or town:"],
+      { font: fontBold, size: 12, align: "left" }
+    );
+
+    // first line (with several bracketed pieces)
+    drawBracketLine(
+      "by ______________________ (deponent’s name) of (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________,"
+    );
+
+    // second line (with bracketed pieces)
+    drawBracketLine(
+      "before me at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, on (date) ______________________"
+    );
+
+    // second O. Reg line with styled link (roman, blue, underlined)
+    (function () {
+      const prefix = "in accordance with ";
+      const linkText = "O. Reg. 431/20";
+      const suffix = ", Administering Oath or Declaration Remotely.";
+      const size = 12;
+      const f = fontReg;
+
+      ensureSpace(1, size);
+      const baseX = marginLeft;
+      const textY = y;
+
+      const prefixWidth = f.widthOfTextAtSize(prefix, size);
+      const linkWidth = f.widthOfTextAtSize(linkText, size);
+
+      page.drawText(prefix, { x: baseX, y: textY, size, font: f });
+
+      const linkX = baseX + prefixWidth;
+      page.drawText(linkText, {
+        x: linkX,
+        y: textY,
+        size,
+        font: f,
+        color: linkColor
+      });
+      page.drawLine({
+        start: { x: linkX, y: textY - 2 },
+        end: { x: linkX + linkWidth, y: textY - 2 },
+        thickness: 0.5,
+        color: linkColor
+      });
+
+      page.drawText(suffix, {
+        x: linkX + linkWidth,
+        y: textY,
+        size,
+        font: f
+      });
+
+      addLinkAnnotation(
+        page,
+        pdfDoc,
+        linkX,
+        textY,
+        linkWidth,
+        size,
+        regUrl
+      );
+
+      y -= size + lineGap;
+    })();
+
+    drawWrappedLines(
+      ["Commissioner for Taking Affidavits (or as may be)"],
+      { font: fontReg, size: 12, align: "left" }
+    );
+
+    drawSignatureRow(
+      "Signature of Commissioner (or as may be)",
+      "Signature of Deponent",
+      true
+    );
+  }
 
 
   // --- Layout: heading ---
@@ -918,11 +1176,11 @@ function drawJurat() {
 
   const nameOf = (x) =>
     [x?.first, x?.last].filter(Boolean).join(" ").trim();
-  const role = (d.role || "").toLowerCase();
+  const roleIntro = (d.role || "").toLowerCase();
   let title = nameOf(d);
   if (!title) {
-    if (role === "plaintiff" && c.plaintiffs?.[0]) title = nameOf(c.plaintiffs[0]);
-    if (role === "defendant" && c.defendants?.[0]) title = nameOf(c.defendants[0]);
+    if (roleIntro === "plaintiff" && c.plaintiffs?.[0]) title = nameOf(c.plaintiffs[0]);
+    if (roleIntro === "defendant" && c.defendants?.[0]) title = nameOf(c.defendants[0]);
   }
 
   drawWrappedLines(
@@ -940,17 +1198,17 @@ function drawJurat() {
   const city = d.city ? `of the City of ${d.city}` : "";
   const prov = d.prov ? `in the Province of ${d.prov}` : "";
   let capIntro = "";
-  switch (role) {
+  switch (roleIntro) {
     case "plaintiff":
     case "defendant":
-      capIntro = `the ${role}`;
+      capIntro = `the ${roleIntro}`;
       break;
     case "lawyer":
       capIntro = "the lawyer for a party";
       break;
     case "officer":
     case "employee":
-      capIntro = d.roleDetail ? `the ${d.roleDetail} of a party` : `an ${role} of a party`;
+      capIntro = d.roleDetail ? `the ${d.roleDetail} of a party` : `an ${roleIntro} of a party`;
       break;
     default:
       capIntro = d.role ? `the ${d.role}` : "";

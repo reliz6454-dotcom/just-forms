@@ -12,22 +12,17 @@
 <body>
   <main>
     <section>
-      <!-- Top toolbar -->
+        <!-- Top toolbar -->
       <div class="toolbar">
         <button id="back">◀ Back</button>
-        <div class="export-group">
-          <button id="exportTxt">Affidavit (TXT)</button>
-
-          <label class="append-back-label">
-            <input type="checkbox" id="appendBackTxt">
-            Append backpage (recommended if filing without exhibits)
-          </label>
-
+        <div>
+          <button id="exportTxt">Export Affidavit (TXT)</button>
           <button id="exportAffPdf">Affidavit (PDF)</button>
           <button id="exportExhPdf">Exhibits Package (PDF)</button>
           <button id="exportFullPdf">Full Package (PDF)</button>
         </div>
       </div>
+
 
       <!-- Live previews -->
       <div class="card" id="heading"></div>
@@ -71,6 +66,39 @@
       <div class="card" id="backsheet"></div>
     </section>
   </main>
+
+      <!-- Export Options Modal -->
+      <div id="exportModal" class="modal" aria-hidden="true">
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
+          <h3 id="exportModalTitle">Export options</h3>
+
+          <form id="exportForm">
+            <div class="field">
+              <label for="exportDate">Sworn date (optional)</label>
+              <input type="date" id="exportDate" name="exportDate">
+              <div class="mt-6">
+                <label>
+                  <input type="checkbox" id="exportNoDate">
+                  This affidavit has no sworn date yet (I will write it in after export)
+                </label>
+              </div>
+            </div>
+
+            <div class="field">
+              <label>
+                <input type="checkbox" id="exportExcludeBack">
+                Exclude backsheet (Form 4C) from this export
+              </label>
+            </div>
+          </form>
+
+          <div class="modal-actions">
+            <button id="exportCancel" type="button">Cancel</button>
+            <button id="exportConfirm" type="button">Continue</button>
+          </div>
+        </div>
+      </div>
+
 
   <!-- Exhibit Scheme Modal -->
   <div id="schemeModal" class="modal" aria-hidden="true">

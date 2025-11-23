@@ -292,6 +292,10 @@ input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; appearance: none; }
 
+.field {
+  margin: 8px 0 10px;
+}
+
 /* ===== Form error styles ===== */
 .form-errors { color: #dc2626; margin-top: .25rem; font-size: 0.95rem; }
 .field input[type="date"].error,

@@ -456,7 +456,7 @@ function buildAffidavitText(includeBacksheet, swornDateUpper) {
       .trim();
     const swornLine = swornDateUpper
       ? `SWORN ${swornDateUpper}`
-      : "Sworn __________________________";
+      : "SWORN _____________________";
     lines.push(`AFFIDAVIT OF ${deponentName.toUpperCase()}`);
     lines.push(swornLine);
   }
@@ -1335,7 +1335,7 @@ async function buildExhibitsPdfDoc() {
       align: "center"
     });
 
-    // "This is exhibit A to the affidavit of ..."
+    // "This is exhibit A"
     const desc =
       ex.meta?.shortDesc ||
       `This is exhibit ${ex.label} to the affidavit of ${deponentName || "the deponent"}.`;
@@ -1540,7 +1540,7 @@ async function buildBacksheetPdfDoc(swornDateUpper) {
 
   const swornLine = swornDateUpper
     ? `SWORN ${swornDateUpper}`
-    : "Sworn [date left blank]";
+    : "SWORN _____________________";
   y = drawLines(page, [swornLine], {
     font: fontBold,
     size: 12,
@@ -1555,20 +1555,27 @@ async function buildBacksheetPdfDoc(swornDateUpper) {
 }
 
 /* --------------------------
- *  Sworn date prompt
+ *  Sworn date helpers (modal)
  * -------------------------- */
 
-async function promptBacksheetDateUpper() {
-  const raw = window.prompt(
-    "Backsheet sworn date (optional):\n\nEnter a date as you want it to appear (e.g., August 10, 2025), or leave blank and click OK to omit.",
-    ""
-  );
-  if (raw === null) {
-    // user cancelled; treat as leaving blank but still exporting
-    return "";
-  }
-  const trimmed = raw.trim();
-  return trimmed ? trimmed.toUpperCase() : "";
+function formatDateUpperFromInput(value) {
+  // value like "2025-11-23"
+  if (!value) return "";
+  const parts = value.split("-");
+  if (parts.length !== 3) return "";
+  const [yStr, mStr, dStr] = parts;
+  const year = parseInt(yStr, 10);
+  const month = parseInt(mStr, 10);
+  const day = parseInt(dStr, 10);
+  if (!year || !month || !day) return "";
+  const months = [
+    "January","February","March","April","May","June",
+    "July","August","September","October","November","December"
+  ];
+  const name = months[month - 1];
+  if (!name) return "";
+  const human = `${name} ${day}, ${year}`;
+  return human.toUpperCase();
 }
 
 /* --------------------------
@@ -1576,38 +1583,124 @@ async function promptBacksheetDateUpper() {
  * -------------------------- */
 
 document.addEventListener("DOMContentLoaded", () => {
-  const btnTxt = $_("#exportTxt");
+  const btnTxt    = $_("#exportTxt");
   const btnAffPdf = $_("#exportAffPdf");
   const btnExhPdf = $_("#exportExhPdf");
-  const btnFullPdf = $_("#exportFullPdf");
-  const cbAppendBack = $_("#appendBackTxt");
+  const btnFullPdf= $_("#exportFullPdf");
 
-  // Default TXT "append backsheet" only when there are no exhibits
-  if (cbAppendBack) {
-    cbAppendBack.checked = !exHasAnyExhibits();
+  // New export options modal
+  const exportModal       = $_("#exportModal");
+  const exportForm        = $_("#exportForm");
+  const exportDateInput   = $_("#exportDate");
+  const exportNoDate      = $_("#exportNoDate");
+  const exportExcludeBack = $_("#exportExcludeBack");
+  const exportCancel      = $_("#exportCancel");
+  const exportConfirm     = $_("#exportConfirm");
+
+  let pendingExportKind = null; // "txt" | "aff" | "exh" | "full"
+
+  function closeExportModal() {
+    if (exportModal) {
+      exportModal.setAttribute("aria-hidden", "true");
+    }
+    pendingExportKind = null;
   }
 
-  if (btnTxt) {
-    btnTxt.onclick = async () => {
-      let swornUpper = "";
-      const wantBack = cbAppendBack ? cbAppendBack.checked : false;
-      if (wantBack) {
-        swornUpper = await promptBacksheetDateUpper();
+  // Sync date enable/disable with "no date" checkbox
+  if (exportNoDate && exportDateInput) {
+    const syncNoDate = () => {
+      if (exportNoDate.checked) {
+        exportDateInput.value = "";
+        exportDateInput.disabled = true;
+      } else {
+        exportDateInput.disabled = false;
       }
-      const txt = buildAffidavitText(wantBack, swornUpper);
+    };
+    exportNoDate.addEventListener("change", syncNoDate);
+    syncNoDate();
+  }
+
+  if (exportCancel) {
+    exportCancel.onclick = () => {
+      closeExportModal();
+    };
+  }
+
+  if (exportModal) {
+    // Click on backdrop closes modal
+    exportModal.addEventListener("click", (e) => {
+      if (e.target === exportModal) {
+        closeExportModal();
+      }
+    });
+  }
+
+  function openExportModal(kind) {
+    pendingExportKind = kind;
+
+    if (exportForm && typeof exportForm.reset === "function") {
+      exportForm.reset();
+    }
+
+    // Backside behaviour:
+    // - For TXT / AFF / EXH: default is INCLUDE backsheet (checkbox unchecked)
+    // - For FULL: backsheet is mandatory → disable checkbox
+    if (exportExcludeBack) {
+      if (kind === "full") {
+        exportExcludeBack.checked = false;
+        exportExcludeBack.disabled = true;
+      } else {
+        exportExcludeBack.disabled = false;
+        exportExcludeBack.checked = false;
+      }
+    }
+
+    // Re-sync date field disabling for "no date" checkbox
+    if (exportNoDate && exportDateInput) {
+      const event = new Event("change");
+      exportNoDate.dispatchEvent(event);
+    }
+
+    if (exportModal) {
+      exportModal.setAttribute("aria-hidden", "false");
+    } else {
+      // Fallback: if modal missing, do nothing
+      pendingExportKind = null;
+    }
+  }
+
+  async function runExport(kind, opts) {
+    const { excludeBack, swornUpper } = opts || {};
+    const includeBacksheet = !excludeBack;
+
+    // TXT affidavit
+    if (kind === "txt") {
+      const txt = buildAffidavitText(!!includeBacksheet, swornUpper || "");
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([txt], { type: "text/plain" }));
       a.download = "Affidavit.txt";
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 1500);
-    };
-  }
+      return;
+    }
 
-  if (btnAffPdf) {
-    btnAffPdf.onclick = async () => {
+    // Affidavit-only PDF
+    if (kind === "aff") {
       try {
-        const pdfDoc = await buildAffidavitPdfDoc();
-        const bytes = await pdfDoc.save();
+        const affDoc = await buildAffidavitPdfDoc(swornUpper || "");
+        let finalDoc = affDoc;
+
+        if (includeBacksheet) {
+          const backDoc = await buildBacksheetPdfDoc(swornUpper || "");
+          const full = await PDFDocument.create();
+          const affPages = await full.copyPages(affDoc, affDoc.getPageIndices());
+          affPages.forEach((p) => full.addPage(p));
+          const backPages = await full.copyPages(backDoc, backDoc.getPageIndices());
+          backPages.forEach((p) => full.addPage(p));
+          finalDoc = full;
+        }
+
+        const bytes = await finalDoc.save();
         const blob = new Blob([bytes], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -1618,15 +1711,28 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (e) {
         console.error(e);
       }
-    };
-  }
+      return;
+    }
 
-  if (btnExhPdf) {
-    btnExhPdf.onclick = async () => {
+    // Exhibits-only PDF (now with optional backsheet)
+    if (kind === "exh") {
       try {
-        const pdfDoc = await buildExhibitsPdfDoc();
-        if (!pdfDoc) return;
-        const bytes = await pdfDoc.save();
+        const exhDoc = await buildExhibitsPdfDoc();
+        if (!exhDoc) return;
+
+        let finalDoc = exhDoc;
+
+        if (includeBacksheet) {
+          const backDoc = await buildBacksheetPdfDoc(swornUpper || "");
+          const full = await PDFDocument.create();
+          const exhPages = await full.copyPages(exhDoc, exhDoc.getPageIndices());
+          exhPages.forEach((p) => full.addPage(p));
+          const backPages = await full.copyPages(backDoc, backDoc.getPageIndices());
+          backPages.forEach((p) => full.addPage(p));
+          finalDoc = full;
+        }
+
+        const bytes = await finalDoc.save();
         const blob = new Blob([bytes], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -1637,33 +1743,29 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (e) {
         console.error(e);
       }
-    };
-  }
+      return;
+    }
 
-  if (btnFullPdf) {
-    btnFullPdf.onclick = async () => {
+    // Full package PDF (affidavit + exhibits + backsheet ALWAYS)
+    if (kind === "full") {
       try {
-        const swornUpper = await promptBacksheetDateUpper();
-
-        const affDoc = await buildAffidavitPdfDoc(swornUpper);
-        const exhDoc = await buildExhibitsPdfDoc();
-        const backDoc = await buildBacksheetPdfDoc(swornUpper);
+        const swornForBacksheet = swornUpper || "";
+        const affDoc = await buildAffidavitPdfDoc(swornForBacksheet);
+        const exhDoc = await buildExhibitsPdfDoc(); // may alert+return null
+        const backDoc = await buildBacksheetPdfDoc(swornForBacksheet);
 
         const full = await PDFDocument.create();
 
-        // Affidavit body pages
         if (affDoc) {
           const affPages = await full.copyPages(affDoc, affDoc.getPageIndices());
           affPages.forEach((p) => full.addPage(p));
         }
 
-        // Exhibits
         if (exhDoc) {
           const exhPages = await full.copyPages(exhDoc, exhDoc.getPageIndices());
           exhPages.forEach((p) => full.addPage(p));
         }
 
-        // Backsheet last
         if (backDoc) {
           const backPages = await full.copyPages(backDoc, backDoc.getPageIndices());
           backPages.forEach((p) => full.addPage(p));
@@ -1680,6 +1782,51 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (e) {
         console.error(e);
       }
+    }
+  }
+
+  if (exportConfirm) {
+    exportConfirm.onclick = async () => {
+      if (!pendingExportKind) {
+        closeExportModal();
+        return;
+      }
+
+      let swornUpper = "";
+      if (exportNoDate && exportNoDate.checked) {
+        swornUpper = "";
+      } else if (exportDateInput && exportDateInput.value) {
+        swornUpper = formatDateUpperFromInput(exportDateInput.value);
+      }
+
+      const kind = pendingExportKind;
+
+      // For full package, backsheet is mandatory → force excludeBack = false
+      const excludeBack =
+        kind === "full"
+          ? false
+          : !!(exportExcludeBack && exportExcludeBack.checked);
+
+      closeExportModal();
+      await runExport(kind, { excludeBack, swornUpper });
     };
+  }
+
+  // Wire buttons
+  if (btnTxt) {
+    btnTxt.onclick = () => openExportModal("txt");
+  }
+
+  if (btnAffPdf) {
+    btnAffPdf.onclick = () => openExportModal("aff");
+  }
+
+  if (btnExhPdf) {
+    // Exhibits-only now shares the unified modal (sworn date + exclude backsheet)
+    btnExhPdf.onclick = () => openExportModal("exh");
+  }
+
+  if (btnFullPdf) {
+    btnFullPdf.onclick = () => openExportModal("full");
   }
 });

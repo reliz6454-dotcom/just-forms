@@ -1,5 +1,5 @@
 // affidavit-export.js — TXT + PDF exports (affidavit, exhibits, full package)
-// Uses TeX Gyre Termes fonts from /fonts and pdf-lib (loaded in affidavit-body.html)
+// Uses PDF base Times fonts (Times-Roman/Italic/Bold/BoldItalic) and pdf-lib (loaded in affidavit-body.html)
 
 import { LS, loadJSON } from "./constants.js";
 
@@ -550,37 +550,14 @@ async function ensurePdfLib() {
   }
 }
 
+// Use PDF base Times fonts; no external font files required.
 async function embedSerifFonts(pdfDoc) {
-  const fonts = {};
-
-  // Try custom TeX Gyre Termes fonts (your /fonts folder)
-  async function tryEmbed(key, url) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) return;
-      const bytes = await res.arrayBuffer();
-      fonts[key] = await pdfDoc.embedFont(new Uint8Array(bytes));
-    } catch (e) {
-      // ignore — fallback will handle it
-    }
-  }
-
-  await tryEmbed("regular", "fonts/texgyretermes-regular.otf");
-  await tryEmbed("italic",  "fonts/texgyretermes-italic.otf");
-  await tryEmbed("bold",    "fonts/texgyretermes-bold.otf");
-
-  // Fallback to built-in Times family if custom fonts missing
-  if (!fonts.regular) {
-    fonts.regular = await pdfDoc.embedStandardFont("Times-Roman");
-  }
-  if (!fonts.italic) {
-    fonts.italic = await pdfDoc.embedStandardFont("Times-Italic");
-  }
-  if (!fonts.bold) {
-    fonts.bold = await pdfDoc.embedStandardFont("Times-Bold");
-  }
-
-  return fonts;
+  return {
+    regular:    await pdfDoc.embedStandardFont("Times-Roman"),
+    italic:     await pdfDoc.embedStandardFont("Times-Italic"),
+    bold:       await pdfDoc.embedStandardFont("Times-Bold"),
+    boldItalic: await pdfDoc.embedStandardFont("Times-BoldItalic")
+  };
 }
 
 /* Helper to draw multi-line text with alignment + line spacing
@@ -657,6 +634,7 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
   const fontReg = fonts.regular;
   const fontBold = fonts.bold;
   const fontItalic = fonts.italic;
+  const fontBoldItalic = fonts.boldItalic || fontBold;
 
   // Initial page + layout constants
   let page = pdfDoc.addPage();
@@ -806,170 +784,102 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
     y = captionY - lineGap - (textSize / 2);
   }
 
-   function drawJurat() {
-    ensureSpace(22, 12);
-
+  function drawJurat() {
     const regUrl = "https://www.ontario.ca/laws/regulation/r20431";
-    const linkColor = rgb(0, 0, 1); // blue for hyperlink
 
-    // Helper: draw a left-aligned, wrapped line where text inside (...) is italic
+    // Helper: draw lines where bracketed portions (…)
+    // are italicized, everything else roman, with wrapping.
     function drawBracketLine(text) {
       const size = 12;
-      const baseFont = fontReg;
-      const italicFont = fontItalic;
       const maxWidth = contentWidth;
 
-      if (!text || !text.trim()) {
-        // behave like a blank line
+      // Split into segments by bracket state (inside () vs outside)
+      const segments = [];
+      let current = "";
+      let italic = false;
+
+      for (const ch of text) {
+        if (ch === "(") {
+          if (current) segments.push({ text: current, italic });
+          italic = true;
+          current = "(";
+        } else if (ch === ")") {
+          current += ")";
+          segments.push({ text: current, italic });
+          italic = false;
+          current = "";
+        } else {
+          current += ch;
+        }
+      }
+      if (current) segments.push({ text: current, italic });
+
+      // Build wrapped lines as arrays of {text, font}
+      const lines = [];
+      let lineTokens = [];
+      let lineWidth = 0;
+
+      for (const seg of segments) {
+        const baseFont = seg.italic ? fontItalic : fontReg;
+        const parts = seg.text.split(/(\s+)/); // keep spaces
+
+        for (const part of parts) {
+          if (!part) continue;
+          const isSpace = /^\s+$/.test(part);
+          const f = baseFont;
+          const w = f.widthOfTextAtSize(part, size);
+
+          if (!isSpace && lineWidth + w > maxWidth && lineTokens.length) {
+            // wrap before this word
+            lines.push(lineTokens);
+            lineTokens = [];
+            lineWidth = 0;
+          }
+
+          if (isSpace && !lineTokens.length) {
+            // skip leading spaces on a new line
+            continue;
+          }
+
+          lineTokens.push({ text: part, font: f });
+          lineWidth += w;
+        }
+      }
+      if (lineTokens.length) lines.push(lineTokens);
+
+      if (!lines.length) {
+        // still advance a blank line if nothing
         ensureSpace(1, size);
         y -= size + lineGap;
         return;
       }
 
-      // 1) Split into segments: outside vs inside parentheses
-      const segments = [];
-      let inParen = false;
-      let buf = "";
+      // Ensure we have vertical space, then draw
+      ensureSpace(lines.length, size);
 
-      for (let i = 0; i < text.length; i++) {
-        const ch = text[i];
-        if (ch === "(" && !inParen) {
-          if (buf) segments.push({ text: buf, italic: false });
-          buf = "(";
-          inParen = true;
-        } else if (ch === ")" && inParen) {
-          buf += ")";
-          segments.push({ text: buf, italic: true });
-          buf = "";
-          inParen = false;
-        } else {
-          buf += ch;
-        }
-      }
-      if (buf) segments.push({ text: buf, italic: inParen });
-
-      // 2) Break segments into tokens (including spaces), preserving italic flag
-      const tokens = [];
-      for (const seg of segments) {
-        const parts = seg.text.split(/(\s+)/); // keep spaces
-        for (const part of parts) {
-          if (!part) continue;
-          tokens.push({ text: part, italic: seg.italic });
-        }
-      }
-
-      // 3) Build wrapped lines by measuring token widths
-      const lines = [];
-      let lineTokens = [];
-      let lineWidth = 0;
-
-      const pushLine = () => {
-        if (!lineTokens.length) return;
-        lines.push({ tokens: lineTokens, width: lineWidth });
-        lineTokens = [];
-        lineWidth = 0;
-      };
-
-      for (const tok of tokens) {
-        const f = tok.italic ? italicFont : baseFont;
-        const w = f.widthOfTextAtSize(tok.text, size);
-
-        if (lineTokens.length && lineWidth + w > maxWidth) {
-          // start a new line before this token
-          pushLine();
-        }
-        lineTokens.push(tok);
-        lineWidth += w;
-      }
-      pushLine();
-
-      // 4) Draw each line, left-aligned, respecting page breaks
-      for (const line of lines) {
-        ensureSpace(1, size);
-        let drawX = marginLeft;
-        const lineY = y;
-
-        for (const tok of line.tokens) {
-          const f = tok.italic ? italicFont : baseFont;
-          page.drawText(tok.text, {
-            x: drawX,
-            y: lineY,
+      for (const tokens of lines) {
+        let x = marginLeft;
+        for (const tk of tokens) {
+          page.drawText(tk.text, {
+            x,
+            y,
             size,
-            font: f
+            font: tk.font
           });
-          drawX += f.widthOfTextAtSize(tok.text, size);
+          x += tk.font.widthOfTextAtSize(tk.text, size);
         }
-
         y -= size + lineGap;
       }
     }
 
-    // ------------------------------------------------------------
-    // 1 — Header with checkboxes
-    // ------------------------------------------------------------
-
-    drawWrappedLines(
-      ["Sworn or Affirmed before me:"],
-      { font: fontItalic, size: 12, align: "left" }
-    );
-    drawWrappedLines(
-      ["(select one): [ ] in person   OR   [ ] by video conference"],
-      { font: fontItalic, size: 12, align: "left" }
-    );
-    drawWrappedLines([""], { font: fontReg, size: 12 });
-
-    // ------------------------------------------------------------
-    // 2 — In-person block
-    // ------------------------------------------------------------
-
-    // Bold heading
-    drawWrappedLines(
-      ["Complete if affidavit is being sworn or affirmed in person:"],
-      { font: fontBold, size: 12, align: "left" }
-    );
-
-    // Location/date line — with bracketed text italic (City, County, date parts)
-    drawBracketLine(
-      "at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, on (date) ______________________."
-    );
-
-    drawSignatureRow(
-      "Signature of Commissioner (or as may be)",
-      "Signature of Deponent",
-      true // captions italic, as before
-    );
-
-    // ------------------------------------------------------------
-    // 3 — Remote heading
-    // ------------------------------------------------------------
-
-    drawWrappedLines(
-      ["Use one of the following if affidavit is being sworn or affirmed by video conference:"],
-      { font: fontItalic, size: 12, align: "left" }
-    );
-    drawWrappedLines([""], { font: fontReg, size: 12 });
-
-    // ------------------------------------------------------------
-    // 4 — SAME CITY block
-    // ------------------------------------------------------------
-
-    drawWrappedLines(
-      ["Complete if deponent and commissioner are in same city or town:"],
-      { font: fontBold, size: 12, align: "left" }
-    );
-
-    // "by (deponent’s name) at the (City...) ..." — bracketed bits italic
-    drawBracketLine(
-      "by ______________________ (deponent’s name) at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, before me on (date) ______________________"
-    );
-
-    // O. Reg line with clickable, styled link (no italics, no overflow)
-    (function () {
+    // Helper: O. Reg. line with visible blue link and annotation
+    function drawORegLine() {
       const prefix = "in accordance with ";
       const linkText = "O. Reg. 431/20";
       const suffix = ", Administering Oath or Declaration Remotely.";
       const size = 12;
       const f = fontReg;
+      const linkColor = rgb(0, 0, 1);
 
       ensureSpace(1, size);
       const baseX = marginLeft;
@@ -981,7 +891,7 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
       // prefix (black)
       page.drawText(prefix, { x: baseX, y: textY, size, font: f });
 
-      // link text (blue, underlined)
+      // link (blue, underlined)
       const linkX = baseX + prefixWidth;
       page.drawText(linkText, {
         x: linkX,
@@ -1017,11 +927,84 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
       );
 
       y -= size + lineGap;
+    }
+
+    // Helper: extra-strong bold+italic heading (draw text twice)
+    function drawStrongHeadingLine(text) {
+      const size = 12;
+      const f = fontBoldItalic;
+      ensureSpace(1, size);
+
+      const y0 = y;
+      const x0 = marginLeft;
+
+      // First pass
+      page.drawText(text, {
+        x: x0,
+        y: y0,
+        size,
+        font: f
+      });
+
+      // Second pass, tiny offset to "thicken" the stroke
+      const offset = 0.18; // in points
+      page.drawText(text, {
+        x: x0 + offset,
+        y: y0,
+        size,
+        font: f
+      });
+
+      y -= size + lineGap;
+    }
+
+    // ------------------------------------------------------------
+    // 1 — Header line (partial italics)
+    // ------------------------------------------------------------
+
+    (function () {
+      const size = 12;
+      ensureSpace(1, size);
+      const baseX = marginLeft;
+      const textY = y;
+
+      const parts = [
+        { text: "Sworn ", font: fontItalic },
+        { text: "or ", font: fontReg },
+        { text: "Affirmed", font: fontItalic },
+        { text: " before me: ", font: fontReg },
+        { text: "(select one)", font: fontItalic },
+        { text: ": [ ] in person   OR   [ ] by video conference", font: fontReg }
+      ];
+
+      let x = baseX;
+      for (const part of parts) {
+        page.drawText(part.text, {
+          x,
+          y: textY,
+          size,
+          font: part.font
+        });
+        x += part.font.widthOfTextAtSize(part.text, size);
+      }
+
+      y -= size + lineGap;
     })();
 
+    // Blank line after header
+    drawWrappedLines([""], { font: fontReg, size: 12 });
+
+    // ------------------------------------------------------------
+    // 2 — In-person block
+    // ------------------------------------------------------------
+
     drawWrappedLines(
-      ["Commissioner for Taking Affidavits (or as may be)"],
-      { font: fontReg, size: 12, align: "left" }
+      ["Complete if affidavit is being sworn or affirmed in person:"],
+      { font: fontBold, size: 12 }
+    );
+
+    drawBracketLine(
+      "   at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, on (date) _____________."
     );
 
     drawSignatureRow(
@@ -1031,82 +1014,63 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
     );
 
     // ------------------------------------------------------------
-    // 5 — DIFFERENT CITY block
+    // 3 — Remote heading (extra space above, strong bold+italic)
+    // ------------------------------------------------------------
+
+    drawWrappedLines([""], { font: fontReg, size: 12 }); // extra blank line
+
+    drawStrongHeadingLine(
+      "Use one of the following if affidavit is being sworn or affirmed by video conference:"
+    );
+
+    drawWrappedLines([""], { font: fontReg, size: 12 }); // blank line after heading
+
+    // ------------------------------------------------------------
+    // 4 — SAME CITY block
+    // ------------------------------------------------------------
+
+    drawWrappedLines(
+      ["Complete if deponent and commissioner are in same city or town:"],
+      { font: fontBold, size: 12 }
+    );
+
+    drawBracketLine(
+      "   by ____________ (deponent’s name) at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, before me on ____________ (date)"
+    );
+
+    drawORegLine();
+
+    // (or as may be) italic here
+    drawBracketLine("Commissioner for Taking Affidavits (or as may be)");
+
+    drawSignatureRow(
+      "Signature of Commissioner (or as may be)",
+      "Signature of Deponent",
+      true
+    );
+
+    // ------------------------------------------------------------
+    // 5 — DIFFERENT CITY block — WITH EXTRA SPACE ABOVE
     // ------------------------------------------------------------
 
     drawWrappedLines([""], { font: fontReg, size: 12 }); // extra blank line
 
     drawWrappedLines(
       ["Complete if deponent and commissioner are not in same city or town:"],
-      { font: fontBold, size: 12, align: "left" }
+      { font: fontBold, size: 12 }
     );
 
-    // first line (with several bracketed pieces)
     drawBracketLine(
-      "by ______________________ (deponent’s name) of (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________,"
+      "   by ____________ (deponent’s name) of (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________,"
     );
-
-    // second line (with bracketed pieces)
     drawBracketLine(
-      "before me at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, on (date) ______________________"
+      "   before me at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, on ____________ (date)"
     );
 
-    // second O. Reg line with styled link (roman, blue, underlined)
-    (function () {
-      const prefix = "in accordance with ";
-      const linkText = "O. Reg. 431/20";
-      const suffix = ", Administering Oath or Declaration Remotely.";
-      const size = 12;
-      const f = fontReg;
+    drawORegLine();
 
-      ensureSpace(1, size);
-      const baseX = marginLeft;
-      const textY = y;
-
-      const prefixWidth = f.widthOfTextAtSize(prefix, size);
-      const linkWidth = f.widthOfTextAtSize(linkText, size);
-
-      page.drawText(prefix, { x: baseX, y: textY, size, font: f });
-
-      const linkX = baseX + prefixWidth;
-      page.drawText(linkText, {
-        x: linkX,
-        y: textY,
-        size,
-        font: f,
-        color: linkColor
-      });
-      page.drawLine({
-        start: { x: linkX, y: textY - 2 },
-        end: { x: linkX + linkWidth, y: textY - 2 },
-        thickness: 0.5,
-        color: linkColor
-      });
-
-      page.drawText(suffix, {
-        x: linkX + linkWidth,
-        y: textY,
-        size,
-        font: f
-      });
-
-      addLinkAnnotation(
-        page,
-        pdfDoc,
-        linkX,
-        textY,
-        linkWidth,
-        size,
-        regUrl
-      );
-
-      y -= size + lineGap;
-    })();
-
-    drawWrappedLines(
-      ["Commissioner for Taking Affidavits (or as may be)"],
-      { font: fontReg, size: 12, align: "left" }
-    );
+    // (or as may be) italic here too
+    drawBracketLine("Commissioner for Taking Affidavits (or as may be)");
 
     drawSignatureRow(
       "Signature of Commissioner (or as may be)",

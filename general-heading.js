@@ -554,14 +554,8 @@ function clonePartyRow(side) {
       removeBtn.textContent = "Remove";
       actions.appendChild(removeBtn);
     }
-
-    removeBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      row.remove();
-      // refresh reusable-lawyer dropdowns since the set of lawyers may have changed
-      populateLawyerSelects(cls);
-    });
   }
+
 
   // keep any dynamic selects in sync
   populateLawyerSelects(cls);

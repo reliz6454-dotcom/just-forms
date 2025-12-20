@@ -220,6 +220,62 @@ function renderHeading() {
     </div>`;
 }
 
+function witnessSupportCaption(caseData, d) {
+  // Defensive reads: support side
+  const side = (d.witnessSide || d.supportSide || d.side || "").toLowerCase();
+
+  const sideLabel =
+    side === "plaintiff" ? "Plaintiff" :
+    side === "defendant" ? "Defendant" :
+    "";
+
+  const rolePlural =
+    side === "plaintiff" ? "Plaintiffs" :
+    side === "defendant" ? "Defendants" :
+    "";
+
+  // If side isn't known, keep it neutral + compliant
+  if (!sideLabel) return "a non-party witness";
+
+  const list =
+    side === "plaintiff" ? (caseData.plaintiffs || []) :
+    side === "defendant" ? (caseData.defendants || []) :
+    [];
+
+  const all = !!(d.witnessAllParties || d.supportAllParties || d.selectAllParties);
+
+  const idxsRaw =
+    d.witnessPartyIndexes ||
+    d.supportPartyIndexes ||
+    d.partyIndexes ||
+    [];
+
+  const idxs = Array.isArray(idxsRaw)
+    ? idxsRaw.map(n => Number(n)).filter(n => Number.isInteger(n))
+    : [];
+
+  const names = all
+    ? list.map(partyName).filter(Boolean)
+    : idxs.map(i => list[i]).map(partyName).filter(Boolean);
+
+  // Build the "in support of ..." target
+  let target = "";
+  if (!names.length) {
+    const plural = (list.length > 1);
+    target = `the ${plural ? rolePlural : sideLabel}`;
+  } else if (names.length === 1) {
+    target = `the ${sideLabel}, ${names[0]}`;
+  } else {
+    target = `the ${rolePlural}, ${joinAnd(names)}`;
+  }
+
+  // Key grammar fix: include subject after "and"
+  return `a non-party witness, I make this affidavit in support of ${target}`;
+}
+
+
+
+
 function renderIntro(){
   const c = loadCase();
   const d = c.deponent || {};
@@ -248,8 +304,9 @@ function renderIntro(){
   switch (role) {
     case "plaintiff":
     case "defendant":
-      cap = `the ${role}`;
+      cap = `the ${sideLabel(role)}`; // "the Plaintiff" / "the Defendant"
       break;
+
 
     case "lawyer":
       cap = lawyerCaption(c, d);
@@ -276,9 +333,19 @@ function renderIntro(){
       break;
     }
 
-    default:
-      cap = d.role ? `the ${d.role}` : "";
+    case "witness":
+      cap = witnessSupportCaption(c, d);
+      break;
+
+    default: {
+      // If role is somehow stored as "Witness" (capitalized) or weird variant, still handle it.
+      const r = (d.role || "").toLowerCase();
+      if (r === "witness") cap = witnessSupportCaption(c, d);
+      else cap = d.role ? `the ${d.role}` : "";
+      break;
+    }
   }
+
 
   const oathText = oath === "swear" ? "MAKE OATH AND SAY:" : "AFFIRM:";
   const parts = [full ? `I, ${full}` : "I,", city, prov, cap || null].filter(Boolean);

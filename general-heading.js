@@ -529,6 +529,16 @@ function clonePartyRow(side) {
   clearPartyRow(row, cls);
   extra.appendChild(row);
 
+  // ✅ FIX: wire the "Add another..." button inside THIS cloned row
+  // (the original wiring only attaches to the first row by ID)
+  const addBtn = row.querySelector(".add-party-btn");
+  if (addBtn) {
+    addBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      clonePartyRow(side);
+    });
+  }
+
   // keep any dynamic selects in sync
   populateLawyerSelects(cls);
 
@@ -537,6 +547,7 @@ function clonePartyRow(side) {
 
   return row;
 }
+
 
 function ensurePartyRowsFromData(side, list) {
   const isPl = side === "pl";

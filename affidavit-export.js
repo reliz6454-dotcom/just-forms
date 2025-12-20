@@ -27,6 +27,200 @@ const collapse = (s) =>
 
 const byNo = (a, b) => (a.number || 0) - (b.number || 0);
 
+/* ---------------------------
+ *  Deponent intro helpers
+ *  (MUST match affidavit-body.js renderIntro)
+ * --------------------------- */
+
+function nameOf(p) {
+  return [p?.first, p?.last].filter(Boolean).join(" ").trim();
+}
+
+function sideLabel(s) {
+  return s === "plaintiff" ? "Plaintiff" : (s === "defendant" ? "Defendant" : "");
+}
+
+function partyName(p) {
+  if (!p) return "";
+  const co = (p.company || "").trim();
+  const person = [p.first || "", p.last || ""]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  return co || person || "";
+}
+
+function joinAnd(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) return "";
+  if (arr.length === 1) return arr[0];
+  if (arr.length === 2) return `${arr[0]} and ${arr[1]}`;
+  return `${arr.slice(0, -1).join(", ")}, and ${arr[arr.length - 1]}`;
+}
+
+function article(word = "") {
+  return /^[aeiou]/i.test(String(word || "").trim()) ? "an" : "a";
+}
+
+function partyFromSideIndex(caseData, side, i) {
+  const list =
+    side === "plaintiff" ? (caseData.plaintiffs || [])
+    : side === "defendant" ? (caseData.defendants || [])
+    : [];
+  return Number.isInteger(i) ? list[i] : null;
+}
+
+function lawyerCaption(caseData, deponent) {
+  const side = (deponent.lawyerSide || "").toLowerCase();
+  if (side !== "plaintiff" && side !== "defendant") return "the lawyer for a party";
+
+  const roleSingular = side === "plaintiff" ? "Plaintiff" : "Defendant";
+  const rolePlural   = side === "plaintiff" ? "Plaintiffs" : "Defendants";
+
+  if (deponent.lawyerAllParties) {
+    return `the lawyer for the ${rolePlural}`;
+  }
+
+  const list =
+    side === "plaintiff" ? (caseData.plaintiffs || [])
+    : (caseData.defendants || []);
+
+  const names = (deponent.lawyerPartyIndexes || [])
+    .map((i) => list[i])
+    .map(partyName)
+    .filter(Boolean);
+
+  if (names.length === 1) return `the lawyer for the ${roleSingular}, ${names[0]}`;
+  if (names.length > 1)   return `the lawyer for the ${rolePlural}, ${joinAnd(names)}`;
+  return "the lawyer for a party";
+}
+
+function witnessSupportCaption(caseData, d) {
+  const side = (d.witnessSide || d.supportSide || d.side || "").toLowerCase();
+
+  const sideSing =
+    side === "plaintiff" ? "Plaintiff" :
+    side === "defendant" ? "Defendant" :
+    "";
+
+  const sidePlur =
+    side === "plaintiff" ? "Plaintiffs" :
+    side === "defendant" ? "Defendants" :
+    "";
+
+  if (!sideSing) return "a non-party witness";
+
+  const list =
+    side === "plaintiff" ? (caseData.plaintiffs || []) :
+    side === "defendant" ? (caseData.defendants || []) :
+    [];
+
+  const all = !!(d.witnessAllParties || d.supportAllParties || d.selectAllParties);
+
+  const idxsRaw =
+    d.witnessPartyIndexes ||
+    d.supportPartyIndexes ||
+    d.partyIndexes ||
+    [];
+
+  const idxs = Array.isArray(idxsRaw)
+    ? idxsRaw.map((n) => Number(n)).filter((n) => Number.isInteger(n))
+    : [];
+
+  const selectedNames = all
+    ? list.map(partyName).filter(Boolean)
+    : idxs.map((i) => list[i]).map(partyName).filter(Boolean);
+
+  let target = "";
+  if (!selectedNames.length) {
+    const plural = (list.length > 1);
+    target = `the ${plural ? sidePlur : sideSing}`;
+  } else if (selectedNames.length === 1) {
+    target = `the ${sideSing}, ${selectedNames[0]}`;
+  } else {
+    target = `the ${sidePlur}, ${joinAnd(selectedNames)}`;
+  }
+
+  return `a non-party witness, I make this affidavit in support of ${target}`;
+}
+
+function resolveDeponentFullName(caseData, deponent) {
+  const role = (deponent.role || "").toLowerCase();
+  return (
+    nameOf(deponent) ||
+    (role === "plaintiff"  && caseData.plaintiffs?.[0] ? nameOf(caseData.plaintiffs[0]) :
+     role === "defendant" && caseData.defendants?.[0] ? nameOf(caseData.defendants[0]) :
+     "")
+  ).trim();
+}
+
+function buildIntroCaption(caseData, d) {
+  const role = (d.role || "").toLowerCase();
+
+  switch (role) {
+    case "plaintiff":
+    case "defendant":
+      return `the ${sideLabel(role)}`; // "the Plaintiff" / "the Defendant"
+
+    case "lawyer":
+      return lawyerCaption(caseData, d);
+
+    case "officer":
+    case "employee": {
+      const side = (d.roleSide || "").toLowerCase();
+      const sideWord = sideLabel(side);
+      const party = partyFromSideIndex(caseData, side, d.rolePartyIndex);
+      const org = partyName(party);
+
+      if (d.roleDetail && sideWord && org) {
+        return `the ${d.roleDetail} of the ${sideWord} ${org}`;
+      } else if (d.roleDetail && org) {
+        return `the ${d.roleDetail} of ${org}`;
+      } else if (!d.roleDetail && sideWord && org) {
+        return `${article(role)} ${role} of the ${sideWord} ${org}`;
+      } else if (d.roleDetail) {
+        return `the ${d.roleDetail} of a party`;
+      } else {
+        return `${article(role)} ${role} of a party`;
+      }
+    }
+
+    case "witness":
+      return witnessSupportCaption(caseData, d);
+
+    default: {
+      const r = (d.role || "").toLowerCase();
+      if (r === "witness") return witnessSupportCaption(caseData, d);
+      return d.role ? `the ${d.role}` : "";
+    }
+  }
+}
+
+function buildIntroParts(caseData) {
+  const c = caseData || {};
+  const d = c.deponent || {};
+  const oath = (exLoadOath() || "").toLowerCase();
+
+  const full = resolveDeponentFullName(c, d);
+
+  const city = d.city ? `of the City of ${d.city}` : "";
+  const prov = d.prov ? `in the Province of ${d.prov}` : "";
+
+  const cap = buildIntroCaption(c, d);
+
+  const oathText = oath === "swear" ? "MAKE OATH AND SAY:" : "AFFIRM:";
+
+  // Important: this mirrors affidavit-body.js parts join + trailing ", OATH"
+  const parts = [full ? `I, ${full}` : "I,", city, prov, cap || null].filter(Boolean);
+  const opening = parts.join(", ");
+
+  return { full, openingLine: `${opening}, ${oathText}` };
+}
+
+/* ---------------------------
+ *  Exhibit labels
+ * --------------------------- */
+
 function exAlpha(n) {
   let s = "";
   while (n > 0) {
@@ -50,17 +244,6 @@ function computeExLabels(paras, scheme) {
 }
 
 /* ---------- Heading helpers (match your preview) ---------- */
-
-function partyName(p) {
-  if (!p) return "";
-  const co = (p.company || "").trim();
-  const person = [p.first || "", p.last || ""]
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-  return co || person || "";
-}
 
 const names = (arr) => (Array.isArray(arr) ? arr : []).map(partyName).filter(Boolean);
 const etAl = (xs, limit = 3) =>
@@ -304,7 +487,6 @@ function renderPara(p, labels) {
 function buildAffidavitText(includeBacksheet, swornDateUpper) {
   const c = exLoadCase();
   const d = c.deponent || {};
-  const oath = (exLoadOath() || "").toLowerCase();
   const paras = exLoadParas().sort(byNo);
 
   const scheme = exLoadScheme();
@@ -317,40 +499,11 @@ function buildAffidavitText(includeBacksheet, swornDateUpper) {
   lines.push(gh.l1, gh.l2, gh.l3, gh.l4, gh.l5, gh.l6, gh.l7, gh.l8, "");
 
   // Title
-  const nameOf = (x) =>
-    [x?.first, x?.last].filter(Boolean).join(" ").trim();
-  const role = (d.role || "").toLowerCase();
-  let title = nameOf(d);
-  if (!title) {
-    if (role === "plaintiff" && c.plaintiffs?.[0]) title = nameOf(c.plaintiffs[0]);
-    if (role === "defendant" && c.defendants?.[0]) title = nameOf(c.defendants[0]);
-  }
-  lines.push(`Affidavit of ${title || ""}`, "");
+  const { full: titleName, openingLine } = buildIntroParts(c);
+  lines.push(`Affidavit of ${titleName || ""}`, "");
 
-  // Intro / opening line
-  const city = d.city ? `of the City of ${d.city}` : "";
-  const prov = d.prov ? `in the Province of ${d.prov}` : "";
-  let cap = "";
-  switch (role) {
-    case "plaintiff":
-    case "defendant":
-      cap = `the ${role}`;
-      break;
-    case "lawyer":
-      cap = "the lawyer for a party";
-      break;
-    case "officer":
-    case "employee":
-      cap = d.roleDetail ? `the ${d.roleDetail} of a party` : `an ${role} of a party`;
-      break;
-    default:
-      cap = d.role ? `the ${d.role}` : "";
-  }
-  const oathText = oath === "swear" ? "MAKE OATH AND SAY:" : "AFFIRM:";
-  const opening = [title ? `I, ${title}` : "I,", city, prov, cap || null]
-    .filter(Boolean)
-    .join(", ");
-  lines.push(`${opening}, ${oathText}`, "");
+  // Intro / opening line (FIXED to match affidavit-body.js)
+  lines.push(openingLine, "");
 
   // Paragraphs: N. + head, lists beneath
   paras.forEach((p) => {
@@ -399,7 +552,6 @@ function buildAffidavitText(includeBacksheet, swornDateUpper) {
   lines.push(
     "   by ______________________ (deponent’s name) at the (City, Town, etc.) of ______________________ in the (County, Regional Municipality, etc.) of ______________________, before me on ______________________ (date)"
   );
-  // O. Reg line – plain text, separate URL line
   lines.push(
     "   in accordance with O. Reg. 431/20, Administering Oath or Declaration Remotely."
   );
@@ -449,15 +601,11 @@ function buildAffidavitText(includeBacksheet, swornDateUpper) {
     lines.push(`Court File No.: ${gh.fileNo || ""}`);
     lines.push(shortTitle);
     lines.push("");
-    const deponentName = [d.first || "", d.last || ""]
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .join(" ")
-      .trim();
+    const deponentName = resolveDeponentFullName(c, d);
     const swornLine = swornDateUpper
       ? `SWORN ${swornDateUpper}`
       : "SWORN _____________________";
-    lines.push(`AFFIDAVIT OF ${deponentName.toUpperCase()}`);
+    lines.push(`AFFIDAVIT OF ${String(deponentName || "").toUpperCase()}`);
     lines.push(swornLine);
   }
 
@@ -1079,7 +1227,6 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
     );
   }
 
-
   // --- Layout: heading ---
 
   // Court File No. (right aligned)
@@ -1113,7 +1260,6 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
         extraGapAfter: 6
       });
     } else {
-      // If there is no second line, still preserve the vertical gap
       drawWrappedLines([""], {
         font: fontReg,
         size: 12,
@@ -1129,7 +1275,6 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
     size: 12,
     align: "left"
   });
-
 
   // Plaintiffs / role
   drawWrappedLines([gh.l4], {
@@ -1164,18 +1309,10 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
   });
 
   // --- Title "AFFIDAVIT OF ..." ---
-
-  const nameOf = (x) =>
-    [x?.first, x?.last].filter(Boolean).join(" ").trim();
-  const roleIntro = (d.role || "").toLowerCase();
-  let title = nameOf(d);
-  if (!title) {
-    if (roleIntro === "plaintiff" && c.plaintiffs?.[0]) title = nameOf(c.plaintiffs[0]);
-    if (roleIntro === "defendant" && c.defendants?.[0]) title = nameOf(c.defendants[0]);
-  }
+  const { full: titleName, openingLine } = buildIntroParts(c);
 
   drawWrappedLines(
-    [`AFFIDAVIT OF ${String(title || "").toUpperCase()}`],
+    [`AFFIDAVIT OF ${String(titleName || "").toUpperCase()}`],
     {
       font: fontBold,
       size: 12,
@@ -1184,32 +1321,7 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
     }
   );
 
-  // --- Intro line ---
-
-  const city = d.city ? `of the City of ${d.city}` : "";
-  const prov = d.prov ? `in the Province of ${d.prov}` : "";
-  let capIntro = "";
-  switch (roleIntro) {
-    case "plaintiff":
-    case "defendant":
-      capIntro = `the ${roleIntro}`;
-      break;
-    case "lawyer":
-      capIntro = "the lawyer for a party";
-      break;
-    case "officer":
-    case "employee":
-      capIntro = d.roleDetail ? `the ${d.roleDetail} of a party` : `an ${roleIntro} of a party`;
-      break;
-    default:
-      capIntro = d.role ? `the ${d.role}` : "";
-  }
-  const oathText = oath === "swear" ? "MAKE OATH AND SAY:" : "AFFIRM:";
-  const opening = [title ? `I, ${title}` : "I,", city, prov, capIntro || null]
-    .filter(Boolean)
-    .join(", ");
-  const openingLine = `${opening}, ${oathText}`;
-
+  // --- Intro line (FIXED to match affidavit-body.js) ---
   drawWrappedLines([openingLine], {
     font: fontReg,
     size: 12,
@@ -1218,7 +1330,6 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
   });
 
   // --- Paragraphs (with lists) ---
-
   const listStart = /^\s*(?:• |[a-z]+\. )/i;
 
   for (const p of paras) {
@@ -1233,7 +1344,6 @@ async function buildAffidavitPdfDoc(swornDateUpperForBacksheet) {
     }
 
     if (head.length === 0 && list.length === 0) {
-      // Empty numbered paragraph
       drawWrappedLines([`${p.number}.`], {
         font: fontReg,
         size: 12,
@@ -1305,18 +1415,7 @@ async function buildExhibitsPdfDoc() {
   const d = c.deponent || {};
 
   // --- Deponent name logic: mirror affidavit-body.js renderIntro ---
-  const nameOf = (p) =>
-    [p?.first, p?.last].filter(Boolean).join(" ").trim();
-
-  const role = (d.role || "").toLowerCase();
-
-  let deponentName =
-    nameOf(d) ||
-    (role === "plaintiff"  && c.plaintiffs?.[0]
-      ? nameOf(c.plaintiffs[0])
-      : (role === "defendant" && c.defendants?.[0]
-          ? nameOf(c.defendants[0])
-          : ""));
+  let deponentName = resolveDeponentFullName(c, d);
 
   // Fallback if we *still* don't have a name
   if (!deponentName) {
@@ -1351,8 +1450,7 @@ async function buildExhibitsPdfDoc() {
       align: "center"
     });
 
-    // --- SECOND LINE: "This is exhibit "A" to the affidavit of Robin Yates." ---
-    // (no longer using meta shortDesc; always use this pattern)
+    // --- SECOND LINE: "This is exhibit "A" to the affidavit of X." ---
     const desc = `This is exhibit "${ex.label}" to the affidavit of ${deponentName}.`;
 
     y -= 12;
@@ -1428,10 +1526,10 @@ async function buildExhibitsPdfDoc() {
   return pdfDoc;
 }
 
-
 /* --------------------------
  *  PDF: Backsheet page
  * -------------------------- */
+
 // Choose filer (party or lawyer) for backsheet, mirroring affidavit-body.js logic
 function pickFilerForBacksheet(c = {}, d = {}) {
   const sideList = (side) =>
@@ -1555,7 +1653,6 @@ async function buildBacksheetPdfDoc(swornDateUpper) {
 
   const gh     = buildGH(c);
   const where  = (c.commencedAt || "").trim();
-  const court  = gh.l2;
   const fileNo = gh.fileNo;
 
   const namesList = (arr) =>
@@ -1591,7 +1688,7 @@ async function buildBacksheetPdfDoc(swornDateUpper) {
     .join(" ")
     .trim();
 
-  // Filer info (party or lawyer) — same logic as preview via helper
+  // Filer info (party or lawyer)
   const filer =
     pickFilerForBacksheet(c, d) || {
       type: "party",
@@ -1654,14 +1751,13 @@ async function buildBacksheetPdfDoc(swornDateUpper) {
     align: "right"
   });
 
-  // ---------- Parties row: left vs right + "-and-" in the middle ----------
-
+  // Parties row
   y -= 24;
   const rowTopY = y;
 
   const textSize = 12;
 
-  // Left (Plaintiff) block
+  // Left (Plaintiff)
   const plNameY = rowTopY;
   const plRoleY = plNameY - (textSize + lineGap);
 
@@ -1678,7 +1774,7 @@ async function buildBacksheetPdfDoc(swornDateUpper) {
     font: fontReg
   });
 
-  // Right (Defendant) block
+  // Right (Defendant)
   const dfNameY = rowTopY;
   const dfRoleY = dfNameY - (textSize + lineGap);
 
@@ -1700,7 +1796,7 @@ async function buildBacksheetPdfDoc(swornDateUpper) {
     font: fontReg
   });
 
-  // "-and-" centred between the two sides
+  // "-and-" centered
   const andText  = "-and-";
   const andWidth = fontReg.widthOfTextAtSize(andText, textSize);
   const andX     = marginLeft + (contentWidth - andWidth) / 2;
@@ -1716,11 +1812,10 @@ async function buildBacksheetPdfDoc(swornDateUpper) {
   // Move y below the parties row
   y = dfRoleY - (textSize + lineGap);
 
-  // ---------- Horizontal rule under parties ----------
-
+  // Horizontal rule
   y -= 8;
   page.drawLine({
-    start: { x: marginLeft,            y },
+    start: { x: marginLeft,               y },
     end:   { x: marginLeft + contentWidth, y },
     thickness: 0.75,
     color: rgb(0, 0, 0)
@@ -1730,42 +1825,34 @@ async function buildBacksheetPdfDoc(swornDateUpper) {
   const bodyTopY = y - 20;
   y = bodyTopY;
 
-  // ---------- Body: all main text in the RIGHT half (to the right of the centre line) ----------
+  // Right-half layout
+  const bodyX     = centerX + 10;
+  const bodyWidth = contentWidth / 2 - 10;
 
-  const bodyX     = centerX + 10;                  // start a bit to the right of the vertical line
-  const bodyWidth = contentWidth / 2 - 10;         // right half width
+  // Court name split into two lines
+  const COURT_TOP = "ONTARIO";
+  const COURT_BOTTOM = "SUPERIOR COURT OF JUSTICE";
 
-// Court name split into two lines:
-// 1) "ONTARIO" italic
-// 2) "SUPERIOR COURT OF JUSTICE" regular
+  y = drawLines(page, [COURT_TOP], {
+    font:  fonts.italic,
+    size:  12,
+    x:     bodyX,
+    yStart:y,
+    width: bodyWidth,
+    lineGap,
+    align: "center"
+  });
 
-const COURT_TOP = "ONTARIO";
-const COURT_BOTTOM = "SUPERIOR COURT OF JUSTICE";
+  y = drawLines(page, [COURT_BOTTOM], {
+    font:  fontReg,
+    size:  12,
+    x:     bodyX,
+    yStart:y,
+    width: bodyWidth,
+    lineGap,
+    align: "center"
+  });
 
-// Line 1 - italic
-y = drawLines(page, [COURT_TOP], {
-  font:  fonts.italic,       // <— italic font
-  size:  12,
-  x:     bodyX,
-  yStart:y,
-  width: bodyWidth,
-  lineGap,
-  align: "center"
-});
-
-// Line 2 - regular
-y = drawLines(page, [COURT_BOTTOM], {
-  font:  fontReg,
-  size:  12,
-  x:     bodyX,
-  yStart:y,
-  width: bodyWidth,
-  lineGap,
-  align: "center"
-});
-
-
-  // Proceeding commenced at ...
   y = drawLines(
     page,
     [`Proceeding commenced at ${where || "(place)"}`],
@@ -1780,7 +1867,6 @@ y = drawLines(page, [COURT_BOTTOM], {
     }
   );
 
-  // Affidavit title and sworn line
   y -= 2 * (12 + lineGap);
 
   y = drawLines(
@@ -1811,8 +1897,6 @@ y = drawLines(page, [COURT_BOTTOM], {
     align: "center"
   });
 
-  // ---------- Filer block (bottom right area, still in the right half) ----------
-
   y -= 3 * (12 + lineGap);
 
   const filerLines = [];
@@ -1833,8 +1917,7 @@ y = drawLines(page, [COURT_BOTTOM], {
     });
   }
 
-  // ---------- Vertical “slab” line centred in the body ----------
-
+  // Vertical slab line
   page.drawLine({
     start: { x: centerX, y: bodyTopY + 10 },
     end:   { x: centerX, y: bottomMargin },
@@ -1845,13 +1928,11 @@ y = drawLines(page, [COURT_BOTTOM], {
   return pdfDoc;
 }
 
-
 /* --------------------------
  *  Sworn date helpers (modal)
  * -------------------------- */
 
 function formatDateUpperFromInput(value) {
-  // value like "2025-11-23"
   if (!value) return "";
   const parts = value.split("-");
   if (parts.length !== 3) return "";
@@ -1960,7 +2041,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (exportModal) {
       exportModal.setAttribute("aria-hidden", "false");
     } else {
-      // Fallback: if modal missing, do nothing
       pendingExportKind = null;
     }
   }
@@ -2111,20 +2191,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Wire buttons
-  if (btnTxt) {
-    btnTxt.onclick = () => openExportModal("txt");
-  }
-
-  if (btnAffPdf) {
-    btnAffPdf.onclick = () => openExportModal("aff");
-  }
-
-  if (btnExhPdf) {
-    // Exhibits-only now shares the unified modal (date + exclude backsheet)
-    btnExhPdf.onclick = () => openExportModal("exh");
-  }
-
-  if (btnFullPdf) {
-    btnFullPdf.onclick = () => openExportModal("full");
-  }
+  if (btnTxt) btnTxt.onclick = () => openExportModal("txt");
+  if (btnAffPdf) btnAffPdf.onclick = () => openExportModal("aff");
+  if (btnExhPdf) btnExhPdf.onclick = () => openExportModal("exh");
+  if (btnFullPdf) btnFullPdf.onclick = () => openExportModal("full");
 });

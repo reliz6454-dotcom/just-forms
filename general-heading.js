@@ -635,10 +635,28 @@ document.addEventListener("DOMContentLoaded", () => {
   if (addDf) addDf.addEventListener("click", (e) => { e.preventDefault(); clonePartyRow("df"); });
 
   // ✅ Delegated remove handler (works for any .remove-party-btn)
+  // ✅ Delegated remove handler with "data present" warning
   function wireRemoveDelegation(rootSelector, extraSelector, cls) {
     const root = document.querySelector(rootSelector);
     const extra = document.querySelector(extraSelector);
     if (!root || !extra) return;
+
+    function rowHasAnyData(row) {
+      // Any non-empty input/textarea?
+      const textFilled = Array.from(row.querySelectorAll("input, textarea")).some((el) => {
+        if (el.type === "checkbox" || el.type === "radio") return el.checked;
+        return (el.value || "").trim().length > 0;
+      });
+
+      if (textFilled) return true;
+
+      // Any select with a chosen (non-empty) value?
+      const selectChosen = Array.from(row.querySelectorAll("select")).some(
+        (sel) => (sel.value || "").trim() !== ""
+      );
+
+      return selectChosen;
+    }
 
     root.addEventListener("click", (e) => {
       const btn = e.target?.closest?.(".remove-party-btn");
@@ -647,14 +665,23 @@ document.addEventListener("DOMContentLoaded", () => {
       const row = btn.closest(".party-block");
       if (!row) return;
 
-      // Only allow removing rows that are in the "extra" container
+      // Only allow removing rows that are in the "extra" container (never the first row)
       if (!extra.contains(row)) return;
+
+      // Warn if anything has been entered/selected in this row
+      if (rowHasAnyData(row)) {
+        const ok = confirm(
+          "This party entry contains information. If you remove it, the information in this entry will not be included when you save/submit this page.\n\nDo you want to remove this party entry?"
+        );
+        if (!ok) return;
+      }
 
       e.preventDefault();
       row.remove();
       populateLawyerSelects(cls);
     });
   }
+
 
   wireRemoveDelegation("#plaintiff-information", "#extra-plaintiffs", "pl");
   wireRemoveDelegation("#defendant-information", "#extra-defendants", "df");

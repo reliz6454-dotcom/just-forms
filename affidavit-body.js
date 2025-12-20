@@ -163,8 +163,8 @@ function lawyerCaption(caseData, deponent){
     .map(partyName)
     .filter(Boolean);
 
-  if (names.length === 1) return `the lawyer for the ${roleSingular} ${names[0]}`;
-  if (names.length > 1)   return `the lawyer for the ${rolePlural} ${joinAnd(names)}`;
+  if (names.length === 1) return `the lawyer for the ${roleSingular}, ${names[0]}`;
+  if (names.length > 1)   return `the lawyer for the ${rolePlural}, ${joinAnd(names)}`;
   return "the lawyer for a party";
 }
 function roleLabel(side,count,isMotion,movingSide){

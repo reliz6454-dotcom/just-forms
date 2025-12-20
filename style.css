@@ -455,3 +455,17 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
 .bs-filer-license{ margin-top:2px; }
 
 .scheme-control .scheme-opt.active { font-weight: 700; }
+
+
+/* Doc intake modal: keep the existing modal show/hide logic,
+   just make the dialog scroll if it’s too tall. */
+#docMetaModal[aria-hidden="false"] .modal-dialog {
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+
+@supports (height: 100dvh) {
+  #docMetaModal[aria-hidden="false"] .modal-dialog {
+    max-height: calc(100dvh - 32px);
+  }
+}

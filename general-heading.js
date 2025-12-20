@@ -522,20 +522,44 @@ function clonePartyRow(side) {
   if (!root || !first || !extra) return null;
 
   const row = first.cloneNode(true);
+
+  // ✅ Prevent duplicate IDs in cloned rows
+  row.querySelectorAll("[id]").forEach((n) => n.removeAttribute("id"));
+
   row.classList.remove("party-first");
   row.classList.remove("def-party-first");
   row.classList.add("party-block");
+
 
   clearPartyRow(row, cls);
   extra.appendChild(row);
 
   // ✅ FIX: wire the "Add another..." button inside THIS cloned row
-  // (the original wiring only attaches to the first row by ID)
   const addBtn = row.querySelector(".add-party-btn");
   if (addBtn) {
     addBtn.addEventListener("click", (e) => {
       e.preventDefault();
       clonePartyRow(side);
+    });
+  }
+
+  // ✅ NEW: ensure cloned rows have a Remove button + wiring
+  const actions = row.querySelector(".party-actions");
+  if (actions) {
+    let removeBtn = actions.querySelector(".remove-party-btn");
+    if (!removeBtn) {
+      removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "remove-party-btn";
+      removeBtn.textContent = "Remove";
+      actions.appendChild(removeBtn);
+    }
+
+    removeBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      row.remove();
+      // refresh reusable-lawyer dropdowns since the set of lawyers may have changed
+      populateLawyerSelects(cls);
     });
   }
 
@@ -547,6 +571,7 @@ function clonePartyRow(side) {
 
   return row;
 }
+
 
 
 function ensurePartyRowsFromData(side, list) {
@@ -608,6 +633,33 @@ document.addEventListener("DOMContentLoaded", () => {
   const addDf = document.getElementById("add-defendant") || document.getElementById("add-defendant-initial");
   if (addPl) addPl.addEventListener("click", (e) => { e.preventDefault(); clonePartyRow("pl"); });
   if (addDf) addDf.addEventListener("click", (e) => { e.preventDefault(); clonePartyRow("df"); });
+
+  // ✅ Delegated remove handler (works for any .remove-party-btn)
+  function wireRemoveDelegation(rootSelector, extraSelector, cls) {
+    const root = document.querySelector(rootSelector);
+    const extra = document.querySelector(extraSelector);
+    if (!root || !extra) return;
+
+    root.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.(".remove-party-btn");
+      if (!btn) return;
+
+      const row = btn.closest(".party-block");
+      if (!row) return;
+
+      // Only allow removing rows that are in the "extra" container
+      if (!extra.contains(row)) return;
+
+      e.preventDefault();
+      row.remove();
+      populateLawyerSelects(cls);
+    });
+  }
+
+  wireRemoveDelegation("#plaintiff-information", "#extra-plaintiffs", "pl");
+  wireRemoveDelegation("#defendant-information", "#extra-defendants", "df");
+
+
 
   // Populate from storage (court + parties)
   const data = loadCase() || {};

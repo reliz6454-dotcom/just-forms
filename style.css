@@ -1,484 +1,17 @@
-/* style.css — Affidavit editor + RTE (clean) */
+/* style.css — Clean (intentional) */
 
 /* ===== Predictable sizing ===== */
 html { box-sizing: border-box; }
 *, *::before, *::after { box-sizing: inherit; }
 
-/* ===== Headings ===== */
-h1 {
-  background: linear-gradient(to right, #20d38c, #1c69ed, #8a32cd, #de0e98);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  color: transparent;
-  font-size: 30px;
-}
-
-/* Basic form fieldset width constraint (desktop-friendly) */
-fieldset { width: 600px; }
-
-/* Role detail box toggled via JS */
-#role-detail-box { display: none; margin-top: 8px; }
-
-/* ===== Party form (Plaintiff / Defendant) ===== */
-.party-block {
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
-  padding: 12px 0;
-  background: #fff;
-}
-.party-list { display: grid; gap: 12px; max-width: 700px; }
-.or-separator { text-align: left; font-weight: 600; color: #666; margin: 10px 0; letter-spacing: 1px; }
-.party-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
-
-/* ===== Buttons (page-wide) ===== */
-button,
-.add-party-btn,
-.remove-party-btn {
-  background: none;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 14px;
-  cursor: pointer;
-  color: #000;
-  transition: background-color .15s, border-color .15s;
-}
-button:hover,
-.add-party-btn:hover,
-.remove-party-btn:hover { background-color: #f5f5f5; border-color: #bbb; }
-button:disabled,
-.add-party-btn:disabled { opacity: .6; cursor: not-allowed; }
-
-/* Two inputs side by side */
-.name-row { display: flex; gap: 12px; }
-.name-row .cell { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
-.name-row .cell label { width: 100px; text-align: left; color: #000; }
-.name-row .cell input[type="text"] {
-  flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 6px;
-}
-@media (max-width: 600px) {
-  .name-row { flex-direction: column; }
-  .name-row .cell label { width: auto; }
-}
-
-/* --- A11y utility --- */
-.visually-hidden {
-  position: absolute !important;
-  clip: rect(1px,1px,1px,1px);
-  padding: 0; border: 0; height: 1px; width: 1px; overflow: hidden; white-space: nowrap;
-}
-
-/* Spacing utilities */
-.mt-6  { margin-top: .5rem; }
-.mt-12 { margin-top: .75rem; }
-.ml-6  { margin-left: .5rem; }
-
-/* ===== Cards & page layout ===== */
-.card {
-  border: 1px solid #e5e5e5;
-  border-radius: 12px;
-  padding: 14px;
-  margin: 14px 0;
-}
-
-.style-of-cause {
-  display: grid; grid-template-columns: 1fr auto 1fr;
-  gap: 8px; align-items: center;
-}
-.vs { text-align: center; font-weight: 700; }
-.muted { color: #666; }
-
-/* Paragraph rows: left (number/controls) | middle (text) | right (spacer) */
-.row {
-  display: grid;
-  grid-template-columns: 140px 1fr 320px;
-  gap: 16px 24px;
-  align-items: start;
-  margin-bottom: 24px;
-}
-.para-num-row { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-.num-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-
-@media (max-width: 1100px) {
-  .row { grid-template-columns: 160px 1fr; }
-  .row-file { grid-column: 1 / -1; }
-}
-
-/* Inputs */
-textarea {
-  width: 100%;
-  min-height: 56px;
-  padding: 0.6rem;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  line-height: 1.35;
-  resize: vertical;
-}
-textarea:focus {
-  outline: none;
-  border-color: #999;
-  box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
-}
-textarea::placeholder { color: #6b7280; opacity: 1; }
-input[type="number"],
-input[type="file"] { padding: 0.5rem; border: 1px solid #ccc; border-radius: 8px; }
-.row-file label { display: block; margin-bottom: 6px; }
-
-/* Badges and top toolbar */
-.pill { font: 600 .85rem/1 system-ui; padding: .2rem .5rem; border: 1px solid #ddd; border-radius: 999px; }
-.toolbar { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
-
-/* Move control */
-.applyReorder {
-  padding: 0.4rem 0.7rem; border: 1px solid #ccc; border-radius: 8px;
-  background-color: #f6f6f6; cursor: pointer; font-size: 0.9rem; transition: background-color .15s;
-}
-.applyReorder:hover { background-color: #eaeaea; }
-.applyReorder[disabled] { opacity: .6; cursor: not-allowed; }
-
-/* Inline “Paragraph No.” label + current number badge */
-.no-inline { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 6px; }
-.move-controls { display: flex; flex-direction: column; gap: 4px; }
-.row-num .num { width: 5.5ch; text-align: center; padding: 4px 6px; }
-
-/* ===== General Heading preview (Word-like) ===== */
-#heading .gh {
-  max-width: 6.5in; margin: 0 auto 10px auto;
-  padding: 0;
-  font-family: "Times New Roman", Times, serif;
-}
-#heading .gh-line { line-height: 2; margin: 0; display: block; }
-#heading .gh-file-no { text-align: right; }
-#heading .gh-court {
-  text-align: center;
-  text-transform: uppercase;
-}
-
-#heading .gh-court-top {
-  display: block;
-  font-style: italic;
-  font-weight: normal;
-}
-
-#heading .gh-court-bottom {
-  display: block;
-  font-style: normal;
-  font-weight: 700;
-}
-
-#heading .gh-between {
-  text-align: left;
-  font-weight: normal;   /* not bold */
-  letter-spacing: 0.25em; /* ensures spacing looks deliberate */
-}
-
-#heading .gh-parties, #heading .gh-and { text-align: center; }
-#heading .gh-and { letter-spacing: 0.5px; font-weight: 600; }
-#heading .gh-role { text-align: right; }
-
-/* ===== Modal (unified) ===== */
-.modal[aria-hidden="true"] { display: none; }
-.modal[aria-hidden="false"] {
-  position: fixed; inset: 0; background: rgba(0,0,0,.35);
-  display: grid; place-items: center; z-index: 50; padding: 16px;
-}
-.modal-dialog {
-  background: #fff; border-radius: 12px; padding: 18px 20px;
-  width: min(520px, 92vw); box-shadow: 0 10px 30px rgba(0,0,0,.2);
-}
-.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
-
-/* Intake modal controls */
-#docMetaForm label { display: block; margin: 8px 0 4px; font-weight: 600; }
-#docMetaForm textarea,
-#docMetaForm input[type="date"],
-#docMetaForm select {
-  width: 100%; max-width: 100%; box-sizing: border-box;
-}
-
-/* ===== Exhibit scheme toggle ===== */
-.scheme-control { display: inline-flex; align-items: center; gap: 8px; margin-left: 8px; font-size: 14px; }
-.scheme-label { color: #444; }
-.scheme-option { font-weight: 600; }
-.switch { position: relative; display: inline-block; width: 42px; height: 24px; }
-.switch input { display: none; }
-.slider {
-  position: absolute; cursor: pointer; inset: 0; background: #ccc;
-  border-radius: 24px; transition: .2s;
-}
-.slider:before {
-  content: ""; position: absolute; height: 18px; width: 18px; left: 3px; top: 3px;
-  background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: .2s;
-}
-.switch input:checked + .slider { background: #4caf50; }
-.switch input:checked + .slider:before { transform: translateX(18px); }
-
-/* ===== Controls Toolbar ===== */
-.controls { margin: .5rem 0 1rem; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: nowrap; }
-.controls-right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-
-/* ===== Multi-exhibit strip & chips ===== */
-.exhibit-strip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-.exhibit-chip {
-  display: inline-flex; align-items: center; gap: 8px; padding: 6px 8px;
-  border: 1px solid #ddd; border-radius: 999px; background: #fafafa;
-}
-.exhibit-chip .exhibit-actions { display: inline-flex; gap: 6px; }
-.exhibit-chip button {
-  padding: 0 6px; border: 1px solid #ccc; border-radius: 6px;
-  background: #f6f6f6; cursor: pointer; font-size: 12px; line-height: 20px;
-}
-.exhibit-chip button:hover { background: #eaeaea; }
-
-/* Make exhibit label and filename obviously interactive */
-.clickable { cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
-.clickable:focus { outline: 2px solid #999; outline-offset: 2px; }
-
-/* ===== Inline editor surface ===== */
-.para-editor {
-  width: 100%;
-  min-height: 160px;
-  padding: 0.6rem;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  white-space: normal;
-  word-wrap: break-word;
-  outline: none;
-  color: #111;
-  background: #fff;
-}
-.para-editor:focus { border-color: #999; box-shadow: 0 0 0 3px rgba(0,0,0,0.05); }
-
-/* Exhibit chips inline */
-.exh-chip {
-  display: inline; background: none; border: none; padding: 0; margin: 0 0.2em;
-  font-weight: 600; line-height: inherit; user-select: none; -webkit-user-select: none;
-  color: inherit;
-}
-
-/* ===== RTE toolbar ===== */
-.rte-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin: 8px 0;
-}
-.rte-toolbar button,
-.rte-toolbar select {
-  border: 1px solid #ccc;
-  background: #f6f6f6;
-  border-radius: 8px;
-  padding: 4px 8px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.rte-toolbar button:hover { background: #eaeaea; }
-.rte-toolbar .sep { width: 1px; height: 22px; background: #ddd; margin: 0 4px; }
-
-/* Lists inside the editor */
-.para-editor ul,
-.para-editor ol {
-  padding-left: 1.5rem;
-  margin: .25rem 0;
-}
-/* Force ordered lists to a., b., c. */
-.para-editor ol { list-style-type: lower-alpha !important; }
-.para-editor li { margin: .15rem 0; }
-
-/* ===== Numbers input (remove spinners) ===== */
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; appearance: none; }
-
-.field {
-  margin: 8px 0 10px;
-}
-
-/* ===== Form error styles ===== */
-.form-errors { color: #dc2626; margin-top: .25rem; font-size: 0.95rem; }
-.field input[type="date"].error,
-.field textarea.error,
-.field input[type="text"].error,
-.field select.error {
-  outline: 2px solid #dc2626; outline-offset: 2px; border-color: #dc2626;
-}
-.field input:focus,
-.field select:focus,
-.field textarea:focus {
-  border-color: #888;
-  box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
-}
-
-/* =========================
-   Jurat — print-friendly
-   ========================= */
-.jurat{
-  font-family:"Times New Roman", serif;
-  font-size:12pt;
-  line-height:1.25;
-}
-.jurat h2{ font-size:16pt; margin:0 0 8px; }
-.jurat p{ margin:0 0 8px; }
-
-.jurat .note-italic{ font-style:italic; }
-.jurat .section-title{ font-weight:700; font-style:italic; margin:10px 0 6px; }
-.jurat .mt-12{ margin-top:12px; }
-
-/* Paragraphs with blanks in one line */
-.jurat .inline-fill{
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px 10px;
-  align-items:flex-end;
-}
-
-/* True “underscored” blanks that sit on the baseline */
-.jurat .fill{
-  display:inline-block;
-  width:18ch;
-  height:1.1em;
-  line-height:1.1em;
-  border-bottom:1px solid #000;
-  vertical-align:baseline;
-}
-.jurat .fill.sm{ width:12ch; }
-.jurat .fill.md{ width:22ch; }
-.jurat .fill.lg{ width:34ch; }
-
-/* Signature row: two columns (Commissioner | Deponent) */
-.jurat .sig-grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:24px;
-  margin:10px 0 14px;
-}
-.jurat .sig{
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-}
-.jurat .sig .sig-pad{ height:40px; }
-.jurat .sig .sig-line{ border-bottom:1px solid #000; height:0; }
-.jurat .sig .cap{ font-style:italic; }
-
-/* Video-conference commissioner caption on its own row */
-.jurat .comm-block{ margin:10px 0 6px; }
-.jurat .comm-block .cap{ font-style:italic; }
-
-/* Print niceties */
-@media print{
-  .jurat h2{ margin-bottom:6pt; }
-  .jurat .sig-grid{ gap:18px; }
-}
-
-/* ===== Affidavit intro title ===== */
-#intro h2 {
-  text-align: center;
-  text-transform: uppercase; /* renders "AFFIDAVIT OF ROBIN YATES" */
-  font-family: "Times New Roman", Times, serif;
-  font-weight: 700;
-  margin: 4px 0 8px;
-  letter-spacing: 0.5px;
-}
-#intro p { text-align: left; }
-/* =========================
-   Form 4C Backsheet (clean)
-   ========================= */
-
-.bs { font-family: "Times New Roman", Times, serif; color: #111; }
-
-/* Parties row at the very top */
-.bs-toprow{
-  display:grid;
-  grid-template-columns:1fr auto 1fr; /* left side | -and- | right side */
-  align-items:end;
-  gap:12px;
-  padding:8px 0 6px;
-}
-.bs-side{ text-align:left; }
-.bs-side-right{ text-align:right; }
-.bs-names{ font-variant:small-caps; letter-spacing:.02em; line-height:1.2; overflow-wrap:anywhere; }
-.bs-role{ font-size:.95em; margin-top:2px; }
-.bs-and{ text-align:center; font-style:italic; }
-
-/* Full-width rule under the parties */
-.bs-toprule{ border-top:2px solid #000; margin:6px 0 0; }
-
-/* Two-column body: left blank slab + right card with vertical midline */
-.bs-body{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  min-height:240px;
-}
-.bs-main{
-  border-left:2px solid #000;         /* vertical midline */
-  padding:12px 18px 0 18px;
-  display:grid;
-  grid-auto-rows:min-content;
-  row-gap:10px;
-}
-
-/* Court file number at the very top-right of the card */
-.bs-file-topline{
-  text-align:right;
-  font-weight:normal;                  /* not bold */
-  font-style:normal;
-  white-space:nowrap;
-  line-height:1;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-
-/* Court block */
-.bs-court{ text-align:center; font-style:italic; font-weight:normal; }
-.bs-commence{ text-align:center; }
-
-/* Document title + sworn line (centered) */
-.bs-doc-title{
-  text-align:center;
-  font-weight:700;
-  text-transform:uppercase;            /* “AFFIDAVIT OF ROBIN YATES” */
-  margin-top:6px;
-}
-.bs-sworn{
-  text-align:center;
-  font-weight:700;
-}
-
-/* Filer/contact block (centered) */
-.bs-filer{ text-align:center; margin-top:6px; line-height:1.4; }
-.bs-filer-name{ font-weight:600; }
-.bs-filer-addr{ margin-top:2px; }
-.bs-filer-contact{ margin-top:2px; }
-.bs-filer-license{ margin-top:2px; }
-
-.scheme-control .scheme-opt.active { font-weight: 700; }
-
-
-/* Doc intake modal: keep the existing modal show/hide logic,
-   just make the dialog scroll if it’s too tall. */
-#docMetaModal[aria-hidden="false"] .modal-dialog {
-  max-height: calc(100vh - 32px);
-  overflow: auto;
-}
-
-@supports (height: 100dvh) {
-  #docMetaModal[aria-hidden="false"] .modal-dialog {
-    max-height: calc(100dvh - 32px);
-  }
-}
 /* =========================================================
-   Design tokens (safe global, do not alter layout by itself)
+   Design tokens
    ========================================================= */
 :root{
   --primary:#4A66E3;
   --text:#1F1F1F;
 
   --error:#D32F2F;
-  --warning:#ED6C02;
-  --success:#2E7D32;
 
   --bg:#FFFFFF;
   --surface:#F8F9FB;
@@ -505,9 +38,9 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
   --line-height: 1.55;
 }
 
-/* ============================
+/* =========================================================
    Intake pages (index + intro)
-   ============================ */
+   ========================================================= */
 .page-intake{
   background: var(--bg);
   color: var(--text);
@@ -525,8 +58,11 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
   margin: 0 auto;
 }
 
-
 .page-intake h1{
+  color: var(--text);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  font-family: var(--font-sans);
   font-size: 1.75rem;
   line-height: 1.2;
   margin: 0 0 var(--space-12) 0;
@@ -547,7 +83,9 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
   margin-top: 4px;
 }
 
-/* Toolbar (intro only right now, but safe across intake pages) */
+.page-intake form{ width: 100%; }
+
+/* Toolbar */
 .page-intake .toolbar{
   display: flex;
   align-items: center;
@@ -565,8 +103,9 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
   cursor: pointer;
 }
 
-/* Fieldsets as modern panels */
+/* Fieldsets as panels */
 .page-intake fieldset{
+  width: 100%;
   border: 1px solid var(--border);
   background: var(--surface);
   border-radius: var(--radius);
@@ -594,7 +133,6 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
 .page-intake textarea{
   width: 100%;
   max-width: 100%;
-  box-sizing: border-box;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -602,12 +140,8 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
   color: var(--text);
 }
 
-/* Improve placeholder legibility */
-.page-intake ::placeholder{
-  color: #6B7280;
-}
+.page-intake ::placeholder{ color: #6B7280; }
 
-/* Focus visibility */
 .page-intake input:focus-visible,
 .page-intake select:focus-visible,
 .page-intake textarea:focus-visible,
@@ -616,7 +150,7 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
   outline-offset: 2px;
 }
 
-/* Keep your court file number inputs inline */
+/* Court file number inputs inline (index.html) */
 .page-intake #court-file-year,
 .page-intake #court-file-assigned,
 .page-intake #court-file-suffix{
@@ -627,6 +161,7 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
 
 /* Party blocks */
 .page-intake .party-block{
+  width: 100%;
   border: 1px solid var(--border);
   background: #fff;
   border-radius: var(--radius);
@@ -634,11 +169,18 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
   margin: 0 0 var(--space-16) 0;
 }
 
-/* Your existing layout helpers */
-.page-intake .mt-6{ margin-top: var(--space-6); }
-.page-intake .mt-8{ margin-top: var(--space-8); }
-.page-intake .mt-12{ margin-top: var(--space-12); }
-.page-intake .ml-6{ margin-left: var(--space-12); }
+.page-intake .party-list{
+  display: grid;
+  gap: var(--space-12);
+  max-width: 700px;
+}
+
+.page-intake .party-actions{
+  display: flex;
+  gap: var(--space-8);
+  justify-content: flex-end;
+  margin-top: var(--space-8);
+}
 
 /* Two-column rows where you already use .name-row + .cell */
 .page-intake .name-row{
@@ -651,14 +193,12 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
   .page-intake .name-row{ grid-template-columns: 1fr; }
 }
 
-/* OR separator */
 .page-intake .or-separator{
   text-align: center;
   color: var(--text-muted);
   margin: var(--space-12) 0;
 }
 
-/* Choice grid used in affidavit-intro */
 .page-intake .choice-grid{
   display: grid;
   gap: var(--space-8);
@@ -671,49 +211,48 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
   .page-intake .choice-grid.cols-2{ grid-template-columns: 1fr; }
 }
 
-/* Make radio/checkbox rows readable and clickable */
+/* Radios/checkboxes */
 .page-intake input[type="radio"],
 .page-intake input[type="checkbox"]{
   transform: translateY(1px);
 }
 
-.page-intake fieldset > input[type="radio"] + label,
-.page-intake fieldset > input[type="checkbox"] + label{
-  display: inline-block;
-  font-weight: 600;
-  margin: 0 0 var(--space-8) 0;
-}
-
 /* Buttons */
 .page-intake button{
-  border: 1px solid transparent;
   border-radius: 10px;
   padding: 10px 14px;
   font-weight: 800;
   cursor: pointer;
 }
 
-/* Primary submit */
 .page-intake button[type="submit"]{
   background: var(--primary);
-  color: #fff;
+  color:#fff;
+  border: 1px solid transparent;
+}
+.page-intake button[type="submit"]:hover{
+  filter: brightness(0.95);
 }
 
-/* Secondary / add buttons */
 .page-intake .add-party-btn{
   background: #fff;
-  border-color: var(--border);
+  border: 1px solid var(--border);
   color: var(--text);
 }
 
-/* Destructive */
 .page-intake .remove-party-btn{
   background: #fff;
-  border-color: var(--error);
+  border: 1px solid var(--error);
   color: var(--error);
 }
 
-/* Visually hidden (you reference this on index.html) */
+/* Utility spacing (used by your HTML) */
+.page-intake .mt-6{ margin-top: var(--space-6); }
+.page-intake .mt-8{ margin-top: var(--space-8); }
+.page-intake .mt-12{ margin-top: var(--space-12); }
+.page-intake .ml-6{ margin-left: var(--space-12); }
+
+/* A11y utility */
 .page-intake .visually-hidden{
   position: absolute !important;
   height: 1px;
@@ -723,23 +262,26 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
   white-space: nowrap;
 }
 
-/* ============================
-   Body page: modern UI shell
-   ============================ */
+/* =========================================================
+   Body page UI shell (matches intake look)
+   ========================================================= */
 .page-affidavit-body.ui-modern{
   font-family: var(--font-sans);
   color: var(--text);
   background: var(--bg);
 }
 
-/* Make toolbar/buttons/modals consistent */
-.page-affidavit-body.ui-modern .toolbar button,
-.page-affidavit-body.ui-modern button{
-  font-family: var(--font-sans);
+.page-affidavit-body.ui-modern .toolbar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-bottom: var(--space-16);
 }
 
 .page-affidavit-body.ui-modern button{
   border-radius: 10px;
+  font-family: var(--font-sans);
 }
 
 .page-affidavit-body.ui-modern button:focus-visible,
@@ -750,7 +292,7 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
   outline-offset: 2px;
 }
 
-/* Primary action buttons (keep export buttons readable) */
+/* Primary action buttons */
 .page-affidavit-body.ui-modern #exportTxt,
 .page-affidavit-body.ui-modern #exportAffPdf,
 .page-affidavit-body.ui-modern #exportExhPdf,
@@ -770,39 +312,512 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
   border: 1px solid var(--border);
 }
 
-/* Muted helper text */
-.page-affidavit-body.ui-modern .muted{
-  color: var(--text-muted);
-}
+.page-affidavit-body.ui-modern .muted{ color: var(--text-muted); }
 
-/* ============================
-   Preserve "form rendering" font
-   ============================ */
-/* These are the parts that mimic court forms; keep them on a document-like font */
+/* =========================================================
+   Court-form preview blocks (keep document-like font/metrics)
+   ========================================================= */
 .page-affidavit-body #heading,
 .page-affidavit-body #intro,
 .page-affidavit-body #jurat,
-.page-affidavit-body #backsheet,
-.page-affidavit-body #paraList,
-.page-affidavit-body .row,
-.page-affidavit-body .para-editor{
+.page-affidavit-body #backsheet{
   font-family: "Times New Roman", Times, serif;
   color: #000;
 }
-.page-intake form{
-  width: 100%;
+
+/* ===== General Heading preview (Word-like) ===== */
+#heading .gh{
+  max-width: 6.5in;
+  margin: 0 auto 10px auto;
+  padding: 0;
+  font-family: "Times New Roman", Times, serif;
 }
-.page-intake fieldset,
-.page-intake .party-block{
-  width: 100%;
+#heading .gh-line{ line-height: 2; margin: 0; display: block; }
+#heading .gh-file-no{ text-align: right; }
+#heading .gh-court{ text-align: center; text-transform: uppercase; }
+#heading .gh-court-top{ display: block; font-style: italic; font-weight: 400; }
+#heading .gh-court-bottom{ display: block; font-style: normal; font-weight: 700; }
+#heading .gh-between{ text-align: left; letter-spacing: 0.25em; }
+#heading .gh-parties,
+#heading .gh-and{ text-align: center; }
+#heading .gh-and{ letter-spacing: 0.5px; font-weight: 600; }
+#heading .gh-role{ text-align: right; }
+
+/* ===== Affidavit intro title ===== */
+#intro h2{
+  text-align: center;
+  text-transform: uppercase;
+  font-family: "Times New Roman", Times, serif;
+  font-weight: 700;
+  margin: 4px 0 8px;
+  letter-spacing: 0.5px;
+}
+#intro p{ text-align: left; }
+
+/* =========================
+   Jurat — print-friendly
+   ========================= */
+.jurat{
+  font-family:"Times New Roman", serif;
+  font-size:12pt;
+  line-height:1.25;
+}
+.jurat h2{ font-size:16pt; margin:0 0 8px; }
+.jurat p{ margin:0 0 8px; }
+.jurat .note-italic{ font-style:italic; }
+.jurat .section-title{ font-weight:700; font-style:italic; margin:10px 0 6px; }
+
+.jurat .inline-fill{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 10px;
+  align-items:flex-end;
 }
 
-.page-intake button[type="submit"]{
-  background: var(--primary);
-  color:#fff;
-  border: 1px solid transparent;
+.jurat .fill{
+  display:inline-block;
+  width:18ch;
+  height:1.1em;
+  line-height:1.1em;
+  border-bottom:1px solid #000;
+  vertical-align:baseline;
+}
+.jurat .fill.sm{ width:12ch; }
+.jurat .fill.md{ width:22ch; }
+.jurat .fill.lg{ width:34ch; }
+
+.jurat .sig-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:24px;
+  margin:10px 0 14px;
+}
+.jurat .sig{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.jurat .sig .sig-pad{ height:40px; }
+.jurat .sig .sig-line{ border-bottom:1px solid #000; height:0; }
+.jurat .sig .cap{ font-style:italic; }
+
+.jurat .comm-block{ margin:10px 0 6px; }
+.jurat .comm-block .cap{ font-style:italic; }
+
+@media print{
+  .jurat h2{ margin-bottom:6pt; }
+  .jurat .sig-grid{ gap:18px; }
 }
 
-.page-intake button[type="submit"]:hover{
-  filter: brightness(0.95);
+/* =========================
+   Form 4C Backsheet
+   ========================= */
+.bs{
+  font-family: "Times New Roman", Times, serif;
+  color: #111;
+}
+
+.bs-toprow{
+  display:grid;
+  grid-template-columns:1fr auto 1fr;
+  align-items:end;
+  gap:12px;
+  padding:8px 0 6px;
+}
+.bs-side{ text-align:left; }
+.bs-side-right{ text-align:right; }
+.bs-names{ font-variant:small-caps; letter-spacing:.02em; line-height:1.2; overflow-wrap:anywhere; }
+.bs-role{ font-size:.95em; margin-top:2px; }
+.bs-and{ text-align:center; font-style:italic; }
+
+.bs-toprule{ border-top:2px solid #000; margin:6px 0 0; }
+
+.bs-body{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  min-height:240px;
+}
+.bs-main{
+  border-left:2px solid #000;
+  padding:12px 18px 0 18px;
+  display:grid;
+  grid-auto-rows:min-content;
+  row-gap:10px;
+}
+
+.bs-file-topline{
+  text-align:right;
+  white-space:nowrap;
+  line-height:1;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.bs-court{ text-align:center; font-style:italic; font-weight:400; }
+.bs-commence{ text-align:center; }
+
+.bs-doc-title{
+  text-align:center;
+  font-weight:700;
+  text-transform:uppercase;
+  margin-top:6px;
+}
+.bs-sworn{
+  text-align:center;
+  font-weight:700;
+}
+
+.bs-filer{ text-align:center; margin-top:6px; line-height:1.4; }
+.bs-filer-name{ font-weight:600; }
+.bs-filer-addr{ margin-top:2px; }
+.bs-filer-contact{ margin-top:2px; }
+.bs-filer-license{ margin-top:2px; }
+
+/* =========================================================
+   Shared components used on body page
+   ========================================================= */
+
+/* Buttons (generic) */
+button,
+.add-party-btn,
+.remove-party-btn{
+  background: none;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #000;
+  transition: background-color .15s, border-color .15s;
+}
+button:hover,
+.add-party-btn:hover,
+.remove-party-btn:hover{
+  background-color: #f5f5f5;
+  border-color: #bbb;
+}
+button:disabled,
+.add-party-btn:disabled{
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+/* Cards */
+.card{
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 14px;
+  margin: 14px 0;
+}
+
+/* Rows (paragraph editor layout) */
+.row{
+  display: grid;
+  grid-template-columns: 140px 1fr 320px;
+  gap: 16px 24px;
+  align-items: start;
+  margin-bottom: 24px;
+}
+.para-num-row{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+.num-controls{
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+@media (max-width: 1100px){
+  .row{ grid-template-columns: 160px 1fr; }
+  .row-file{ grid-column: 1 / -1; }
+}
+
+/* Inputs */
+textarea{
+  width: 100%;
+  min-height: 56px;
+  padding: 0.6rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  line-height: 1.35;
+  resize: vertical;
+}
+textarea:focus{
+  outline: none;
+  border-color: #999;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
+}
+textarea::placeholder{ color: #6b7280; opacity: 1; }
+
+input[type="number"],
+input[type="file"]{
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+
+.row-file label{ display: block; margin-bottom: 6px; }
+
+/* Pill */
+.pill{
+  font: 600 .85rem/1 system-ui;
+  padding: .2rem .5rem;
+  border: 1px solid #ddd;
+  border-radius: 999px;
+}
+
+/* Move control */
+.applyReorder{
+  padding: 0.4rem 0.7rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background-color: #f6f6f6;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color .15s;
+}
+.applyReorder:hover{ background-color: #eaeaea; }
+.applyReorder[disabled]{ opacity: .6; cursor: not-allowed; }
+
+.no-inline{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.move-controls{ display: flex; flex-direction: column; gap: 4px; }
+.row-num .num{ width: 5.5ch; text-align: center; padding: 4px 6px; }
+
+/* ===== Modal (unified) ===== */
+.modal[aria-hidden="true"]{ display: none; }
+.modal[aria-hidden="false"]{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+  padding: 16px;
+}
+.modal-dialog{
+  background: #fff;
+  border-radius: 12px;
+  padding: 18px 20px;
+  width: min(520px, 92vw);
+  box-shadow: 0 10px 30px rgba(0,0,0,.2);
+}
+.modal-actions{
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+#docMetaForm label{ display: block; margin: 8px 0 4px; font-weight: 600; }
+#docMetaForm textarea,
+#docMetaForm input[type="date"],
+#docMetaForm select{
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Make the intake modal scroll if it’s too tall */
+#docMetaModal[aria-hidden="false"] .modal-dialog{
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+@supports (height: 100dvh){
+  #docMetaModal[aria-hidden="false"] .modal-dialog{
+    max-height: calc(100dvh - 32px);
+  }
+}
+
+/* ===== Exhibit scheme toggle ===== */
+.scheme-control{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+  font-size: 14px;
+}
+.scheme-label{ color: #444; }
+.scheme-option{ font-weight: 600; }
+.scheme-control .scheme-opt.active{ font-weight: 700; }
+
+.switch{ position: relative; display: inline-block; width: 42px; height: 24px; }
+.switch input{ display: none; }
+.slider{
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #ccc;
+  border-radius: 24px;
+  transition: .2s;
+}
+.slider:before{
+  content: "";
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25);
+  transition: .2s;
+}
+.switch input:checked + .slider{ background: #4caf50; }
+.switch input:checked + .slider:before{ transform: translateX(18px); }
+
+/* ===== Controls Toolbar ===== */
+.controls{
+  margin: .5rem 0 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+.controls-right{
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ===== Multi-exhibit strip & chips ===== */
+.exhibit-strip{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.exhibit-chip{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  background: #fafafa;
+}
+.exhibit-chip .exhibit-actions{ display: inline-flex; gap: 6px; }
+.exhibit-chip button{
+  padding: 0 6px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #f6f6f6;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 20px;
+}
+.exhibit-chip button:hover{ background: #eaeaea; }
+
+.clickable{
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.clickable:focus{
+  outline: 2px solid #999;
+  outline-offset: 2px;
+}
+
+/* ===== Inline editor surface ===== */
+.para-editor{
+  width: 100%;
+  min-height: 160px;
+  padding: 0.6rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  white-space: normal;
+  word-wrap: break-word;
+  outline: none;
+  color: #111;
+  background: #fff;
+}
+.para-editor:focus{
+  border-color: #999;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
+}
+
+/* Exhibit chips inline */
+.exh-chip{
+  display: inline;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0 0.2em;
+  font-weight: 600;
+  line-height: inherit;
+  user-select: none;
+  -webkit-user-select: none;
+  color: inherit;
+}
+
+/* ===== RTE toolbar ===== */
+.rte-toolbar{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+}
+.rte-toolbar button,
+.rte-toolbar select{
+  border: 1px solid #ccc;
+  background: #f6f6f6;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.rte-toolbar button:hover{ background: #eaeaea; }
+.rte-toolbar .sep{ width: 1px; height: 22px; background: #ddd; margin: 0 4px; }
+
+.para-editor ul,
+.para-editor ol{
+  padding-left: 1.5rem;
+  margin: .25rem 0;
+}
+.para-editor ol{ list-style-type: lower-alpha !important; }
+.para-editor li{ margin: .15rem 0; }
+
+/* ===== Number input spinners ===== */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button{
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"]{
+  -moz-appearance: textfield;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ===== Form error styles ===== */
+.form-errors{ color: #dc2626; margin-top: .25rem; font-size: 0.95rem; }
+
+.field{ margin: 8px 0 10px; }
+
+.field input[type="date"].error,
+.field textarea.error,
+.field input[type="text"].error,
+.field select.error{
+  outline: 2px solid #dc2626;
+  outline-offset: 2px;
+  border-color: #dc2626;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus{
+  border-color: #888;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
 }

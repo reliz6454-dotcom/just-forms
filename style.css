@@ -521,9 +521,10 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
 }
 
 .page-intake main > section{
-  max-width: 980px;
+  width: min(1100px, calc(100% - 32px));
   margin: 0 auto;
 }
+
 
 .page-intake h1{
   font-size: 1.75rem;
@@ -720,4 +721,88 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
   overflow: hidden;
   clip: rect(1px, 1px, 1px, 1px);
   white-space: nowrap;
+}
+
+/* ============================
+   Body page: modern UI shell
+   ============================ */
+.page-affidavit-body.ui-modern{
+  font-family: var(--font-sans);
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* Make toolbar/buttons/modals consistent */
+.page-affidavit-body.ui-modern .toolbar button,
+.page-affidavit-body.ui-modern button{
+  font-family: var(--font-sans);
+}
+
+.page-affidavit-body.ui-modern button{
+  border-radius: 10px;
+}
+
+.page-affidavit-body.ui-modern button:focus-visible,
+.page-affidavit-body.ui-modern input:focus-visible,
+.page-affidavit-body.ui-modern select:focus-visible,
+.page-affidavit-body.ui-modern textarea:focus-visible{
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Primary action buttons (keep export buttons readable) */
+.page-affidavit-body.ui-modern #exportTxt,
+.page-affidavit-body.ui-modern #exportAffPdf,
+.page-affidavit-body.ui-modern #exportExhPdf,
+.page-affidavit-body.ui-modern #exportFullPdf{
+  background: var(--primary);
+  color: #fff;
+  border: 1px solid transparent;
+}
+
+/* Secondary buttons */
+.page-affidavit-body.ui-modern #back,
+.page-affidavit-body.ui-modern #addParaEnd,
+.page-affidavit-body.ui-modern #undoBtn,
+.page-affidavit-body.ui-modern #redoBtn{
+  background: #fff;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+/* Muted helper text */
+.page-affidavit-body.ui-modern .muted{
+  color: var(--text-muted);
+}
+
+/* ============================
+   Preserve "form rendering" font
+   ============================ */
+/* These are the parts that mimic court forms; keep them on a document-like font */
+.page-affidavit-body #heading,
+.page-affidavit-body #intro,
+.page-affidavit-body #jurat,
+.page-affidavit-body #backsheet,
+.page-affidavit-body #paraList,
+.page-affidavit-body .row,
+.page-affidavit-body .para-editor{
+  font-family: "Times New Roman", Times, serif;
+  color: #000;
+}
+.page-intake form{
+  width: 100%;
+}
+.page-intake fieldset,
+.page-intake .party-block{
+  width: 100%;
+}
+
+.page-intake button[type="submit"]{
+  background: var(--primary);
+  color:#fff;
+  border: 1px solid transparent;
+}
+
+.page-intake button[type="submit"]:hover{
+  filter: brightness(0.95);
 }

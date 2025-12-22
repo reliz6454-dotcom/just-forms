@@ -469,3 +469,255 @@ input[type="number"] { -moz-appearance: textfield; -webkit-appearance: none; app
     max-height: calc(100dvh - 32px);
   }
 }
+/* =========================================================
+   Design tokens (safe global, do not alter layout by itself)
+   ========================================================= */
+:root{
+  --primary:#4A66E3;
+  --text:#1F1F1F;
+
+  --error:#D32F2F;
+  --warning:#ED6C02;
+  --success:#2E7D32;
+
+  --bg:#FFFFFF;
+  --surface:#F8F9FB;
+  --surface-2:#FFFFFF;
+  --border:#E5E7EB;
+
+  --text-muted:#4A4A4A;
+
+  --focus-ring: 3px solid var(--primary);
+
+  --radius: 12px;
+
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+
+  --font-sans: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible",
+               system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+
+  --font-size: 16px;
+  --line-height: 1.55;
+}
+
+/* ============================
+   Intake pages (index + intro)
+   ============================ */
+.page-intake{
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+}
+
+.page-intake main{
+  padding: var(--space-32) var(--space-16);
+}
+
+.page-intake main > section{
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.page-intake h1{
+  font-size: 1.75rem;
+  line-height: 1.2;
+  margin: 0 0 var(--space-12) 0;
+}
+
+.page-intake p{
+  margin: 0 0 var(--space-16) 0;
+}
+
+.page-intake .form-preamble,
+.page-intake .form-instruction,
+.page-intake .hint{
+  color: var(--text-muted);
+}
+
+.page-intake .hint{
+  font-size: 0.95em;
+  margin-top: 4px;
+}
+
+/* Toolbar (intro only right now, but safe across intake pages) */
+.page-intake .toolbar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-16);
+}
+
+.page-intake .toolbar button{
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Fieldsets as modern panels */
+.page-intake fieldset{
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: var(--space-16);
+  margin: 0 0 var(--space-16) 0;
+}
+
+.page-intake legend{
+  font-weight: 800;
+  padding: 0 var(--space-8);
+}
+
+/* Labels + inputs */
+.page-intake label{
+  display: block;
+  font-weight: 700;
+  margin: 0 0 var(--space-6) 0;
+}
+
+.page-intake input[type="text"],
+.page-intake input[type="email"],
+.page-intake input[type="number"],
+.page-intake input[type="date"],
+.page-intake select,
+.page-intake textarea{
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* Improve placeholder legibility */
+.page-intake ::placeholder{
+  color: #6B7280;
+}
+
+/* Focus visibility */
+.page-intake input:focus-visible,
+.page-intake select:focus-visible,
+.page-intake textarea:focus-visible,
+.page-intake button:focus-visible{
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Keep your court file number inputs inline */
+.page-intake #court-file-year,
+.page-intake #court-file-assigned,
+.page-intake #court-file-suffix{
+  width: auto;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Party blocks */
+.page-intake .party-block{
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: var(--radius);
+  padding: var(--space-16);
+  margin: 0 0 var(--space-16) 0;
+}
+
+/* Your existing layout helpers */
+.page-intake .mt-6{ margin-top: var(--space-6); }
+.page-intake .mt-8{ margin-top: var(--space-8); }
+.page-intake .mt-12{ margin-top: var(--space-12); }
+.page-intake .ml-6{ margin-left: var(--space-12); }
+
+/* Two-column rows where you already use .name-row + .cell */
+.page-intake .name-row{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-12);
+  margin-bottom: var(--space-12);
+}
+@media (max-width: 720px){
+  .page-intake .name-row{ grid-template-columns: 1fr; }
+}
+
+/* OR separator */
+.page-intake .or-separator{
+  text-align: center;
+  color: var(--text-muted);
+  margin: var(--space-12) 0;
+}
+
+/* Choice grid used in affidavit-intro */
+.page-intake .choice-grid{
+  display: grid;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+}
+.page-intake .choice-grid.cols-2{
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+}
+@media (max-width: 720px){
+  .page-intake .choice-grid.cols-2{ grid-template-columns: 1fr; }
+}
+
+/* Make radio/checkbox rows readable and clickable */
+.page-intake input[type="radio"],
+.page-intake input[type="checkbox"]{
+  transform: translateY(1px);
+}
+
+.page-intake fieldset > input[type="radio"] + label,
+.page-intake fieldset > input[type="checkbox"] + label{
+  display: inline-block;
+  font-weight: 600;
+  margin: 0 0 var(--space-8) 0;
+}
+
+/* Buttons */
+.page-intake button{
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* Primary submit */
+.page-intake button[type="submit"]{
+  background: var(--primary);
+  color: #fff;
+}
+
+/* Secondary / add buttons */
+.page-intake .add-party-btn{
+  background: #fff;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+/* Destructive */
+.page-intake .remove-party-btn{
+  background: #fff;
+  border-color: var(--error);
+  color: var(--error);
+}
+
+/* Visually hidden (you reference this on index.html) */
+.page-intake .visually-hidden{
+  position: absolute !important;
+  height: 1px;
+  width: 1px;
+  overflow: hidden;
+  clip: rect(1px, 1px, 1px, 1px);
+  white-space: nowrap;
+}

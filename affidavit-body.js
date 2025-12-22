@@ -174,7 +174,13 @@ function roleLabel(side,count,isMotion,movingSide){
   const suf = moving ? (count>1?"/Moving Parties":"/Moving Party") : (count>1?"/Responding Parties":"/Responding Party");
   return base + suf;
 }
-const fmtFile=(cf={})=>{const parts=[cf.year,cf.assign,cf.suffix].map(v=>(v||"").toString().trim()).filter(Boolean); return parts.length?("CV-"+parts.join("-")):"";};
+const fmtFile = (cf = {}) => {
+  const parts = [cf.year, cf.assigned, cf.suffix]
+    .map(v => (v || "").toString().trim())
+    .filter(Boolean);
+  return parts.length ? ("CV-" + parts.join("-")) : "";
+};
+
 function buildHeading(c={}) {
   const file=fmtFile(c.courtFile||{}); const plRaw=listNames(c.plaintiffs||[]); const dfRaw=listNames(c.defendants||[]);
   const isMotion=!!(c.motion&&c.motion.isMotion); const movingSide=c.motion?c.motion.movingSide:null;

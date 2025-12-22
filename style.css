@@ -1,259 +1,278 @@
-/* style.css — Clean (intentional) */
+/* style.css — Just Forms (clean, unified, responsive)
+   - One design system (no duplicates)
+   - Modern UI shell for all pages
+   - Preserves affidavit-body layout + Times-based court previews
+*/
 
-/* ===== Predictable sizing ===== */
-html { box-sizing: border-box; }
-*, *::before, *::after { box-sizing: inherit; }
+/* =========================
+   Base + tokens
+   ========================= */
 
-/* =========================================================
-   Design tokens
-   ========================================================= */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
 :root{
-  --primary:#4A66E3;
-  --text:#1F1F1F;
+  /* Frame */
+  --page-bg: #f5f7fb;
+  --surface: #ffffff;
+  --surface-2: #f7f8fb;
 
-  --error:#D32F2F;
+  --text: #0f172a;
+  --muted: #475569;
+  --border: #d6deea;
 
-  --bg:#FFFFFF;
-  --surface:#F8F9FB;
-  --surface-2:#FFFFFF;
-  --border:#E5E7EB;
+  /* Accent (blue-purple, slightly more blue) */
+  --accent: #3b5bdb;
+  --accent-2: #5b3ddb;
+  --on-accent: #ffffff;
 
-  --text-muted:#4A4A4A;
+  /* Status */
+  --danger: #b91c1c;
 
-  --focus-ring: 3px solid var(--primary);
+  /* Layout */
+  --radius: 14px;
+  --shadow: 0 10px 30px rgba(15, 23, 42, 0.10);
+  --content-max: 1100px;
+  --pad-x: 20px;
 
-  --radius: 12px;
+  /* A11y */
+  --focus: 3px solid rgba(59, 91, 219, 0.35);
 
-  --space-6: 6px;
-  --space-8: 8px;
-  --space-12: 12px;
-  --space-16: 16px;
-  --space-24: 24px;
-  --space-32: 32px;
-
-  --font-sans: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible",
-               system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-
-  --font-size: 16px;
-  --line-height: 1.55;
+  /* Fonts */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
 }
 
-/* =========================================================
-   Intake pages (index + intro)
-   ========================================================= */
-.page-intake{
-  background: var(--bg);
+html, body { height: 100%; }
+body { margin: 0; }
+
+/* =========================
+   Modern UI shell
+   ========================= */
+
+.ui-modern{
+  background: var(--page-bg);
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: var(--font-size);
-  line-height: var(--line-height);
+  line-height: 1.55;
 }
 
-.page-intake main{
-  padding: var(--space-32) var(--space-16);
+.ui-modern main{
+  width: 100%;
+  padding: 22px var(--pad-x) 40px;
 }
 
-.page-intake main > section{
-  width: min(1100px, calc(100% - 32px));
+.ui-modern .container{
+  max-width: var(--content-max);
   margin: 0 auto;
 }
 
-.page-intake h1{
-  color: var(--text);
-  background: none;
-  -webkit-text-fill-color: currentColor;
-  font-family: var(--font-sans);
-  font-size: 1.75rem;
+/* “Card” surface for content sections (intake pages primarily) */
+.ui-modern section{
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+/* Optional reusable card class */
+.ui-modern .card{
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  margin: 14px 0;
+}
+
+.ui-modern h1{
+  font-size: 1.65rem;
   line-height: 1.2;
-  margin: 0 0 var(--space-12) 0;
+  margin: 0 0 10px;
 }
-
-.page-intake p{
-  margin: 0 0 var(--space-16) 0;
+.ui-modern h2{
+  font-size: 1.2rem;
+  line-height: 1.25;
+  margin: 0 0 10px;
 }
+.ui-modern p{ margin: 0 0 12px; }
+.ui-modern .muted,
+.ui-modern .hint,
+.ui-modern .form-preamble,
+.ui-modern .form-instruction{ color: var(--muted); }
 
-.page-intake .form-preamble,
-.page-intake .form-instruction,
-.page-intake .hint{
-  color: var(--text-muted);
-}
+/* =========================
+   Toolbar
+   ========================= */
 
-.page-intake .hint{
-  font-size: 0.95em;
-  margin-top: 4px;
-}
+.ui-modern .toolbar{
+  position: sticky;
+  top: 0;
+  z-index: 20;
 
-.page-intake form{ width: 100%; }
-
-/* Toolbar */
-.page-intake .toolbar{
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-16);
+  gap: 12px;
+
+  background: rgba(255,255,255,0.82);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  padding: 10px 12px;
+  margin: 0 0 14px;
+
+  backdrop-filter: blur(8px);
 }
 
-.page-intake .toolbar button{
+.ui-modern .toolbar-actions{
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* =========================
+   Buttons
+   ========================= */
+
+/* Support both .btn and plain button usage (your HTML uses both) */
+.ui-modern .btn,
+.ui-modern button{
+  appearance: none;
   border: 1px solid var(--border);
-  background: #fff;
+  background: var(--surface);
   color: var(--text);
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-weight: 700;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  font-weight: 650;
   cursor: pointer;
 }
 
-/* Fieldsets as panels */
-.page-intake fieldset{
-  width: 100%;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: var(--radius);
-  padding: var(--space-16);
-  margin: 0 0 var(--space-16) 0;
+.ui-modern .btn:hover,
+.ui-modern button:hover{
+  border-color: #b8c4d8;
 }
 
-.page-intake legend{
-  font-weight: 800;
-  padding: 0 var(--space-8);
-}
-
-/* Labels + inputs */
-.page-intake label{
-  display: block;
-  font-weight: 700;
-  margin: 0 0 var(--space-6) 0;
-}
-
-.page-intake input[type="text"],
-.page-intake input[type="email"],
-.page-intake input[type="number"],
-.page-intake input[type="date"],
-.page-intake select,
-.page-intake textarea{
-  width: 100%;
-  max-width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-2);
-  color: var(--text);
-}
-
-.page-intake ::placeholder{ color: #6B7280; }
-
-.page-intake input:focus-visible,
-.page-intake select:focus-visible,
-.page-intake textarea:focus-visible,
-.page-intake button:focus-visible{
-  outline: var(--focus-ring);
+.ui-modern .btn:focus-visible,
+.ui-modern button:focus-visible,
+.ui-modern input:focus-visible,
+.ui-modern select:focus-visible,
+.ui-modern textarea:focus-visible{
+  outline: var(--focus);
   outline-offset: 2px;
 }
 
-/* Court file number inputs inline (index.html) */
-.page-intake #court-file-year,
-.page-intake #court-file-assigned,
-.page-intake #court-file-suffix{
-  width: auto;
-  display: inline-block;
-  vertical-align: middle;
+.ui-modern .btn[disabled],
+.ui-modern button[disabled]{
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
-/* Party blocks */
-.page-intake .party-block{
-  width: 100%;
+/* Variants */
+.ui-modern .btn-primary{
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+  color: var(--on-accent);
+}
+.ui-modern .btn-primary:hover{ filter: brightness(0.98); }
+
+.ui-modern .btn-ghost{ background: transparent; }
+
+.ui-modern .btn-danger{
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+/* =========================
+   Forms (shared)
+   ========================= */
+
+.ui-modern form{ margin-top: 12px; }
+
+.ui-modern fieldset{
   border: 1px solid var(--border);
-  background: #fff;
   border-radius: var(--radius);
-  padding: var(--space-16);
-  margin: 0 0 var(--space-16) 0;
+  padding: 14px;
+  margin: 14px 0;
+  background: var(--surface);
 }
 
-.page-intake .party-list{
-  display: grid;
-  gap: var(--space-12);
-  max-width: 700px;
+.ui-modern legend{
+  padding: 0 8px;
+  font-weight: 700;
 }
 
-.page-intake .party-actions{
-  display: flex;
-  gap: var(--space-8);
-  justify-content: flex-end;
-  margin-top: var(--space-8);
+.ui-modern label{
+  display: block;
+  font-weight: 700;
+  margin: 10px 0 6px;
 }
 
-/* Two-column rows where you already use .name-row + .cell */
-.page-intake .name-row{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-12);
-  margin-bottom: var(--space-12);
-}
-@media (max-width: 720px){
-  .page-intake .name-row{ grid-template-columns: 1fr; }
-}
-
-.page-intake .or-separator{
-  text-align: center;
-  color: var(--text-muted);
-  margin: var(--space-12) 0;
-}
-
-.page-intake .choice-grid{
-  display: grid;
-  gap: var(--space-8);
-  margin-top: var(--space-8);
-}
-.page-intake .choice-grid.cols-2{
-  grid-template-columns: repeat(2, minmax(180px, 1fr));
-}
-@media (max-width: 720px){
-  .page-intake .choice-grid.cols-2{ grid-template-columns: 1fr; }
-}
-
-/* Radios/checkboxes */
-.page-intake input[type="radio"],
-.page-intake input[type="checkbox"]{
-  transform: translateY(1px);
-}
-
-/* Buttons */
-.page-intake button{
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.page-intake button[type="submit"]{
-  background: var(--primary);
-  color:#fff;
-  border: 1px solid transparent;
-}
-.page-intake button[type="submit"]:hover{
-  filter: brightness(0.95);
-}
-
-.page-intake .add-party-btn{
-  background: #fff;
+.ui-modern input[type="text"],
+.ui-modern input[type="email"],
+.ui-modern input[type="number"],
+.ui-modern input[type="date"],
+.ui-modern select,
+.ui-modern textarea{
+  width: 100%;
+  max-width: 100%;
   border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--surface);
   color: var(--text);
 }
 
-.page-intake .remove-party-btn{
-  background: #fff;
-  border: 1px solid var(--error);
-  color: var(--error);
+.ui-modern ::placeholder{ color: #64748b; }
+
+/* Checkbox/radio alignment */
+.ui-modern input[type="checkbox"],
+.ui-modern input[type="radio"]{
+  width: 18px;
+  height: 18px;
+  margin: 0;
 }
 
-/* Utility spacing (used by your HTML) */
-.page-intake .mt-6{ margin-top: var(--space-6); }
-.page-intake .mt-8{ margin-top: var(--space-8); }
-.page-intake .mt-12{ margin-top: var(--space-12); }
-.page-intake .ml-6{ margin-left: var(--space-12); }
+.ui-modern .choice-row,
+.ui-modern .radio-row{
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
 
-/* A11y utility */
-.page-intake .visually-hidden{
+.ui-modern .radio-row label,
+.ui-modern .choice-row label{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* Two-column “First/Last name” grid pattern */
+.ui-modern .name-row{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 720px){
+  .ui-modern .name-row{ grid-template-columns: 1fr; }
+}
+
+/* Utility spacing you already use */
+.ui-modern .mt-6{ margin-top: 6px; }
+.ui-modern .mt-8{ margin-top: 8px; }
+.ui-modern .mt-12{ margin-top: 12px; }
+.ui-modern .ml-6{ margin-left: 6px; }
+
+/* Visually hidden (a11y) */
+.ui-modern .visually-hidden{
   position: absolute !important;
   height: 1px;
   width: 1px;
@@ -262,61 +281,70 @@ html { box-sizing: border-box; }
   white-space: nowrap;
 }
 
-/* =========================================================
-   Body page UI shell (matches intake look)
-   ========================================================= */
-.page-affidavit-body.ui-modern{
-  font-family: var(--font-sans);
-  color: var(--text);
-  background: var(--bg);
-}
+/* =========================
+   Court File Number row (index.html)
+   ========================= */
 
-.page-affidavit-body.ui-modern .toolbar{
-  display: flex;
+.ui-modern .court-file{ margin-top: 10px; }
+
+.ui-modern .court-file-row{
+  display: grid;
+  grid-template-columns:
+    minmax(4ch, 6ch)
+    auto
+    minmax(10ch, 14ch)
+    auto
+    minmax(6ch, 8ch);
+  gap: 8px;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-8);
-  margin-bottom: var(--space-16);
 }
 
-.page-affidavit-body.ui-modern button{
-  border-radius: 10px;
-  font-family: var(--font-sans);
+.ui-modern .court-file-sep{
+  color: var(--muted);
+  font-weight: 700;
+  user-select: none;
+  text-align: center;
 }
 
-.page-affidavit-body.ui-modern button:focus-visible,
-.page-affidavit-body.ui-modern input:focus-visible,
-.page-affidavit-body.ui-modern select:focus-visible,
-.page-affidavit-body.ui-modern textarea:focus-visible{
-  outline: var(--focus-ring);
-  outline-offset: 2px;
+@media (max-width: 520px){
+  .ui-modern .court-file-row{ grid-template-columns: 1fr; }
+  .ui-modern .court-file-sep{ display: none; }
 }
 
-/* Primary action buttons */
-.page-affidavit-body.ui-modern #exportTxt,
-.page-affidavit-body.ui-modern #exportAffPdf,
-.page-affidavit-body.ui-modern #exportExhPdf,
-.page-affidavit-body.ui-modern #exportFullPdf{
-  background: var(--primary);
-  color: #fff;
-  border: 1px solid transparent;
+/* Remove number spinners */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button{
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"]{
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
-/* Secondary buttons */
-.page-affidavit-body.ui-modern #back,
-.page-affidavit-body.ui-modern #addParaEnd,
-.page-affidavit-body.ui-modern #undoBtn,
-.page-affidavit-body.ui-modern #redoBtn{
-  background: #fff;
+/* =========================
+   Affidavit body page
+   Preserve layout + court previews
+   ========================= */
+
+/* IMPORTANT: don’t apply section “card” shell to body page structural sections;
+   your body page uses its own card blocks + preview areas. */
+.page-affidavit-body section{
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+/* Keep long-form affidavit text readable in editor area */
+.ui-modern .para-editor,
+.ui-modern .ProseMirror{
+  font-size: 16px;
+  line-height: 1.65;
   color: var(--text);
-  border: 1px solid var(--border);
 }
 
-.page-affidavit-body.ui-modern .muted{ color: var(--text-muted); }
-
-/* =========================================================
-   Court-form preview blocks (keep document-like font/metrics)
-   ========================================================= */
+/* ----- Court-form preview blocks (Times, print-like) ----- */
 .page-affidavit-body #heading,
 .page-affidavit-body #intro,
 .page-affidavit-body #jurat,
@@ -416,7 +444,6 @@ html { box-sizing: border-box; }
   font-family: "Times New Roman", Times, serif;
   color: #111;
 }
-
 .bs-toprow{
   display:grid;
   grid-template-columns:1fr auto 1fr;
@@ -429,7 +456,6 @@ html { box-sizing: border-box; }
 .bs-names{ font-variant:small-caps; letter-spacing:.02em; line-height:1.2; overflow-wrap:anywhere; }
 .bs-role{ font-size:.95em; margin-top:2px; }
 .bs-and{ text-align:center; font-style:italic; }
-
 .bs-toprule{ border-top:2px solid #000; margin:6px 0 0; }
 
 .bs-body{
@@ -444,7 +470,6 @@ html { box-sizing: border-box; }
   grid-auto-rows:min-content;
   row-gap:10px;
 }
-
 .bs-file-topline{
   text-align:right;
   white-space:nowrap;
@@ -452,10 +477,8 @@ html { box-sizing: border-box; }
   overflow:hidden;
   text-overflow:ellipsis;
 }
-
 .bs-court{ text-align:center; font-style:italic; font-weight:400; }
 .bs-commence{ text-align:center; }
-
 .bs-doc-title{
   text-align:center;
   font-weight:700;
@@ -466,51 +489,16 @@ html { box-sizing: border-box; }
   text-align:center;
   font-weight:700;
 }
-
 .bs-filer{ text-align:center; margin-top:6px; line-height:1.4; }
 .bs-filer-name{ font-weight:600; }
 .bs-filer-addr{ margin-top:2px; }
 .bs-filer-contact{ margin-top:2px; }
 .bs-filer-license{ margin-top:2px; }
 
-/* =========================================================
-   Shared components used on body page
-   ========================================================= */
+/* =========================
+   Paragraph editor layout (keep)
+   ========================= */
 
-/* Buttons (generic) */
-button,
-.add-party-btn,
-.remove-party-btn{
-  background: none;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 14px;
-  cursor: pointer;
-  color: #000;
-  transition: background-color .15s, border-color .15s;
-}
-button:hover,
-.add-party-btn:hover,
-.remove-party-btn:hover{
-  background-color: #f5f5f5;
-  border-color: #bbb;
-}
-button:disabled,
-.add-party-btn:disabled{
-  opacity: .6;
-  cursor: not-allowed;
-}
-
-/* Cards */
-.card{
-  border: 1px solid #e5e5e5;
-  border-radius: 12px;
-  padding: 14px;
-  margin: 14px 0;
-}
-
-/* Rows (paragraph editor layout) */
 .row{
   display: grid;
   grid-template-columns: 140px 1fr 320px;
@@ -535,64 +523,195 @@ button:disabled,
   .row-file{ grid-column: 1 / -1; }
 }
 
-/* Inputs */
-textarea{
-  width: 100%;
-  min-height: 56px;
-  padding: 0.6rem;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  line-height: 1.35;
-  resize: vertical;
-}
-textarea:focus{
-  outline: none;
-  border-color: #999;
-  box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
-}
-textarea::placeholder{ color: #6b7280; opacity: 1; }
-
-input[type="number"],
-input[type="file"]{
-  padding: 0.5rem;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-}
-
-.row-file label{ display: block; margin-bottom: 6px; }
-
-/* Pill */
 .pill{
-  font: 600 .85rem/1 system-ui;
+  font: 600 .85rem/1 var(--font-sans);
   padding: .2rem .5rem;
-  border: 1px solid #ddd;
+  border: 1px solid #d9e0ef;
   border-radius: 999px;
+  background: #fff;
 }
 
 /* Move control */
 .applyReorder{
-  padding: 0.4rem 0.7rem;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  background-color: #f6f6f6;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
   cursor: pointer;
-  font-size: 0.9rem;
-  transition: background-color .15s;
+  font-size: 0.95rem;
 }
-.applyReorder:hover{ background-color: #eaeaea; }
+.applyReorder:hover{ border-color: #b8c4d8; }
 .applyReorder[disabled]{ opacity: .6; cursor: not-allowed; }
 
 .no-inline{
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 6px;
 }
 .move-controls{ display: flex; flex-direction: column; gap: 4px; }
-.row-num .num{ width: 5.5ch; text-align: center; padding: 4px 6px; }
+.row-num .num{ width: 5.5ch; text-align: center; padding: 6px 8px; }
 
-/* ===== Modal (unified) ===== */
+/* TipTap editor surface */
+.para-editor{
+  width: 100%;
+  min-height: 160px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  outline: none;
+  white-space: normal;
+  word-wrap: break-word;
+}
+.para-editor:focus{
+  border-color: #b8c4d8;
+  box-shadow: 0 0 0 3px rgba(59, 91, 219, 0.12);
+}
+
+/* RTE toolbar */
+.rte-toolbar{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  margin: 8px 0;
+}
+.rte-toolbar button{
+  padding: 8px 10px;
+  border-radius: 10px;
+  min-height: 36px;
+}
+.rte-toolbar .sep{
+  width: 1px;
+  background: rgba(15,23,42,.16);
+  margin: 0 2px;
+}
+
+/* List styling inside the editor */
+.para-editor ul,
+.para-editor ol{
+  padding-left: 1.5rem;
+  margin: .25rem 0;
+}
+.para-editor ol{ list-style-type: lower-alpha !important; }
+.para-editor li{ margin: .15rem 0; }
+
+/* Inline exhibit chips */
+.exh-chip{
+  display: inline;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0 0.2em;
+  font-weight: 700;
+  line-height: inherit;
+  user-select: none;
+  -webkit-user-select: none;
+  color: inherit;
+}
+
+/* Multi-exhibit strip & rail chips */
+.exhibit-strip{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.exhibit-chip{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid #d9e0ef;
+  border-radius: 999px;
+  background: #fff;
+}
+.exhibit-chip .exhibit-actions{
+  display: inline-flex;
+  gap: 6px;
+}
+.exhibit-chip button{
+  padding: 0 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 22px;
+}
+.exhibit-chip button:hover{ background: #eef2ff; }
+
+.clickable{
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.clickable:focus{
+  outline: var(--focus);
+  outline-offset: 2px;
+}
+
+/* Exhibit scheme toggle */
+.scheme-control{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+  font-size: 14px;
+}
+.scheme-label{ color: var(--muted); }
+.switch{ position: relative; display: inline-block; width: 42px; height: 24px; }
+.switch input{ display: none; }
+.slider{
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #cbd5e1;
+  border-radius: 24px;
+  transition: .2s;
+}
+.slider:before{
+  content: "";
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25);
+  transition: .2s;
+}
+.switch input:checked + .slider{ background: #22c55e; }
+.switch input:checked + .slider:before{ transform: translateX(18px); }
+
+/* Controls toolbar area on body page */
+.controls{
+  margin: .5rem 0 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+.controls-right{
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* =========================
+   Modal (unified)
+   ========================= */
+
 .modal[aria-hidden="true"]{ display: none; }
 .modal[aria-hidden="false"]{
   position: fixed;
@@ -616,16 +735,7 @@ input[type="file"]{
   justify-content: flex-end;
 }
 
-#docMetaForm label{ display: block; margin: 8px 0 4px; font-weight: 600; }
-#docMetaForm textarea,
-#docMetaForm input[type="date"],
-#docMetaForm select{
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-/* Make the intake modal scroll if it’s too tall */
+/* Make the intake modal scroll if too tall */
 #docMetaModal[aria-hidden="false"] .modal-dialog{
   max-height: calc(100vh - 32px);
   overflow: auto;
@@ -636,176 +746,9 @@ input[type="file"]{
   }
 }
 
-/* ===== Exhibit scheme toggle ===== */
-.scheme-control{
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: 8px;
-  font-size: 14px;
-}
-.scheme-label{ color: #444; }
-.scheme-option{ font-weight: 600; }
-.scheme-control .scheme-opt.active{ font-weight: 700; }
-
-.switch{ position: relative; display: inline-block; width: 42px; height: 24px; }
-.switch input{ display: none; }
-.slider{
-  position: absolute;
-  cursor: pointer;
-  inset: 0;
-  background: #ccc;
-  border-radius: 24px;
-  transition: .2s;
-}
-.slider:before{
-  content: "";
-  position: absolute;
-  height: 18px;
-  width: 18px;
-  left: 3px;
-  top: 3px;
-  background: #fff;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0,0,0,.25);
-  transition: .2s;
-}
-.switch input:checked + .slider{ background: #4caf50; }
-.switch input:checked + .slider:before{ transform: translateX(18px); }
-
-/* ===== Controls Toolbar ===== */
-.controls{
-  margin: .5rem 0 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: nowrap;
-}
-.controls-right{
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-/* ===== Multi-exhibit strip & chips ===== */
-.exhibit-strip{
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 8px;
-}
-.exhibit-chip{
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 999px;
-  background: #fafafa;
-}
-.exhibit-chip .exhibit-actions{ display: inline-flex; gap: 6px; }
-.exhibit-chip button{
-  padding: 0 6px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  background: #f6f6f6;
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 20px;
-}
-.exhibit-chip button:hover{ background: #eaeaea; }
-
-.clickable{
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.clickable:focus{
-  outline: 2px solid #999;
-  outline-offset: 2px;
-}
-
-/* ===== Inline editor surface ===== */
-.para-editor{
-  width: 100%;
-  min-height: 160px;
-  padding: 0.6rem;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  white-space: normal;
-  word-wrap: break-word;
-  outline: none;
-  color: #111;
-  background: #fff;
-}
-.para-editor:focus{
-  border-color: #999;
-  box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
-}
-
-/* Exhibit chips inline */
-.exh-chip{
-  display: inline;
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0 0.2em;
-  font-weight: 600;
-  line-height: inherit;
-  user-select: none;
-  -webkit-user-select: none;
-  color: inherit;
-}
-
-/* ===== RTE toolbar ===== */
-.rte-toolbar{
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin: 8px 0;
-}
-.rte-toolbar button,
-.rte-toolbar select{
-  border: 1px solid #ccc;
-  background: #f6f6f6;
-  border-radius: 8px;
-  padding: 4px 8px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.rte-toolbar button:hover{ background: #eaeaea; }
-.rte-toolbar .sep{ width: 1px; height: 22px; background: #ddd; margin: 0 4px; }
-
-.para-editor ul,
-.para-editor ol{
-  padding-left: 1.5rem;
-  margin: .25rem 0;
-}
-.para-editor ol{ list-style-type: lower-alpha !important; }
-.para-editor li{ margin: .15rem 0; }
-
-/* ===== Number input spinners ===== */
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button{
-  -webkit-appearance: none;
-  margin: 0;
-}
-input[type="number"]{
-  -moz-appearance: textfield;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-/* ===== Form error styles ===== */
+/* Errors */
 .form-errors{ color: #dc2626; margin-top: .25rem; font-size: 0.95rem; }
-
 .field{ margin: 8px 0 10px; }
-
 .field input[type="date"].error,
 .field textarea.error,
 .field input[type="text"].error,
@@ -813,11 +756,4 @@ input[type="number"]{
   outline: 2px solid #dc2626;
   outline-offset: 2px;
   border-color: #dc2626;
-}
-
-.field input:focus,
-.field select:focus,
-.field textarea:focus{
-  border-color: #888;
-  box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
 }

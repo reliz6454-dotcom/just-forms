@@ -9,19 +9,22 @@
        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.js"></script>
   -->
 </head>
-<body class="page-affidavit-body ui-modern">
+<body class="ui-modern page-body">
   <main>
     <section>
       <!-- Top toolbar -->
-      <div class="toolbar">
-        <button id="back">◀ Back</button>
-        <div>
-          <button id="exportTxt">Export Affidavit (TXT)</button>
-          <button id="exportAffPdf">Export Affidavit (PDF)</button>
-          <button id="exportExhPdf">Export Exhibits Package (PDF)</button>
-          <button id="exportFullPdf">Export Full Package (PDF)</button>
-        </div>
-      </div>
+<div class="toolbar" role="toolbar" aria-label="Page actions">
+  <button id="back" type="button" class="btn btn-ghost">◀ Back</button>
+
+  <div class="toolbar-actions">
+    <button id="exportTxt" type="button" class="btn btn-primary">Export Affidavit (TXT)</button>
+    <button id="exportAffPdf" type="button" class="btn btn-primary">Export Affidavit (PDF)</button>
+    <button id="exportExhPdf" type="button" class="btn btn-primary">Export Exhibits Package (PDF)</button>
+    <button id="exportFullPdf" type="button" class="btn btn-primary">Export Full Package (PDF)</button>
+  </div>
+</div>
+
+
 
       <!-- Live previews -->
       <div class="card" id="heading"></div>

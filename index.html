@@ -2,14 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>General Heading Information Form</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>...</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body class="page-intake page-heading">
+
+<body class="ui-modern page-intake page-heading">
+
 <main>
-  <div class="toolbar">
-  <button id="back" type="button">◀ Back</button>
-</div>
+  <div class="container">
+    <div class="toolbar" role="toolbar" aria-label="Page actions">
+      <button id="back" type="button" class="btn btn-ghost">◀ Back</button>
+      <div class="toolbar-actions"></div>
+    </div>
+
   <section>
     <h1>General Heading Creation</h1>
     <p class="form-preamble">
@@ -20,11 +26,42 @@
       <!-- Court Information -->
       <fieldset>
         <legend>Court Information</legend>
+        <div class="court-file">
+  <label for="court-file-year">Court File Number (CV)</label>
 
-        <label for="court-file-year">Court File Number: CV -</label>
-        <input type="text" id="court-file-year" name="courtfile-number-year" maxlength="2" size="2"> -
-        <input type="text" id="court-file-assigned" name="courtfile-number-assigned" maxlength="6" size="6"> -
-        <input type="text" id="court-file-suffix" name="courtfile-number-suffix" maxlength="4" size="4">
+  <div class="court-file-row">
+    <input
+      type="text"
+      id="court-file-year"
+      name="courtfile-number-year"
+      maxlength="2"
+      placeholder="YY"
+      inputmode="numeric"
+    >
+
+    <span class="court-file-sep" aria-hidden="true">–</span>
+
+    <input
+      type="text"
+      id="court-file-assigned"
+      name="courtfile-number-assigned"
+      maxlength="6"
+      placeholder="NNNNNN"
+      inputmode="numeric"
+    >
+
+    <span class="court-file-sep" aria-hidden="true">–</span>
+
+    <input
+      type="text"
+      id="court-file-suffix"
+      name="courtfile-number-suffix"
+      maxlength="4"
+      placeholder="NNNN"
+      inputmode="numeric"
+    >
+  </div>
+</div>
 
         <div>
           <label for="name-of-court">Name of Court: </label>
@@ -137,7 +174,7 @@
                   <div class="cell">
                     <label>Lawyer Name:</label>
                     <input type="text" class="pl-law-first" placeholder="First">
-                    <input type="text" class="pl-law-last" placeholder="Last" style="margin-left:8px;">
+                    <input type="text" class="pl-law-last input-inline-gap" placeholder="Last">
                   </div>
                 </div>
                 <div class="name-row">
@@ -278,7 +315,8 @@
                     <div class="cell">
                       <label>Lawyer Name:</label>
                       <input type="text" class="pl-law-first" placeholder="First">
-                      <input type="text" class="pl-law-last" placeholder="Last" style="margin-left:8px;">
+                      <input type="text" class="df-law-last input-inline-gap" placeholder="Last">
+
                     </div>
                   </div>
                   <div class="name-row">
@@ -624,36 +662,42 @@
       </fieldset>
 
       <!-- Motion Context (optional) -->
-      <fieldset id="motion-context">
-        <legend>Motion Context</legend>
-        <p class="form-instruction">Will this general heading be used for a motion?</p>
+   <fieldset id="motion-context">
+  <legend>Motion Context</legend>
+  <p class="form-instruction">Will this general heading be used for a motion?</p>
 
-        <div role="radiogroup" aria-labelledby="motion-q">
-          <span id="motion-q" class="visually-hidden">Motion?</span>
-          <label>
-            <input type="radio" id="motion-no" name="is-motion" value="no" checked>
-            No
-          </label>
-          <label class="ml-6">
-            <input type="radio" id="motion-yes" name="is-motion" value="yes">
-            Yes
-          </label>
-        </div>
+  <div class="radio-row" role="radiogroup" aria-labelledby="motion-q">
+    <span id="motion-q" class="visually-hidden">Will this general heading be used for a motion?</span>
 
-        <div id="motion-fields" hidden style="margin-top:8px">
-          <p class="form-instruction">Which side is the <strong>Moving Party</strong>?</p>
-          <label>
-            <input type="radio" id="moving-plaintiff" name="moving-side" value="plaintiff">
-            Plaintiff(s)
-          </label>
-          <label class="ml-6">
-            <input type="radio" id="moving-defendant" name="moving-side" value="defendant">
-            Defendant(s)
-          </label>
-        </div>
-      </fieldset>
+    <label for="motion-no">
+      <input type="radio" id="motion-no" name="is-motion" value="no" checked>
+      No
+    </label>
 
-      <button type="submit">Submit</button>
+    <label for="motion-yes">
+      <input type="radio" id="motion-yes" name="is-motion" value="yes">
+      Yes
+    </label>
+  </div>
+
+  <div id="motion-fields" hidden style="margin-top:10px">
+    <p class="form-instruction">Which side is the <strong>Moving Party</strong>?</p>
+    <div class="radio-row" role="radiogroup" aria-label="Moving party side">
+      <label for="moving-plaintiff">
+        <input type="radio" id="moving-plaintiff" name="moving-side" value="plaintiff">
+        Plaintiff(s)
+      </label>
+      <label for="moving-defendant">
+        <input type="radio" id="moving-defendant" name="moving-side" value="defendant">
+        Defendant(s)
+      </label>
+    </div>
+  </div>
+</fieldset>
+
+
+    <button type="submit" class="btn btn-primary">Continue</button>
+
     </form>
   </section>
 </main>

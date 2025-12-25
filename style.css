@@ -7,6 +7,17 @@
 /* =========================
    Base + tokens
    ========================= */
+/* ===========================
+   UI FONT — ATKINSON HYPERLEGIBLE NEXT (self-hosted)
+   =========================== */
+
+@font-face{
+  font-family: "Atkinson Hyperlegible Next";
+  src: url("./fonts/atkinson-hyperlegible/AtkinsonHyperlegibleNextVF-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 *,
 *::before,
@@ -18,17 +29,19 @@
   --surface: #ffffff;
   --surface-2: #f7f8fb;
 
-  --text: #0f172a;
-  --muted: #475569;
+  /* Text (your requested text color) */
+  --text: #1F1F1F;
+  --muted: #4b5563;
   --border: #d6deea;
 
-  /* Accent (blue-purple, slightly more blue) */
+  /* Brand (your requested primary) */
   --accent: #3b5bdb;
-  --accent-2: #5b3ddb;
   --on-accent: #ffffff;
 
-  /* Status */
-  --danger: #b91c1c;
+  /* Status (your requested) */
+  --error:   #D32F2F;
+  --warning: #ED6C02;
+  --success: #2E7D32;
 
   /* Layout */
   --radius: 14px;
@@ -36,11 +49,15 @@
   --content-max: 1100px;
   --pad-x: 20px;
 
-  /* A11y */
-  --focus: 3px solid rgba(59, 91, 219, 0.35);
+  /* A11y (derived from primary) */
+  --focus: 3px solid rgba(74, 102, 227, 0.40);
 
-  /* Fonts */
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+  /* Fonts (UI) — Atkinson Hyperlegible Next is self-hosted via @font-face above */
+  --font-sans: "Atkinson Hyperlegible Next",
+               "Atkinson Hyperlegible",
+               ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+               Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+
 }
 
 html, body { height: 100%; }
@@ -173,7 +190,7 @@ body { margin: 0; }
 
 /* Variants */
 .ui-modern .btn-primary{
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: var(--accent);
   border-color: transparent;
   color: var(--on-accent);
 }
@@ -182,8 +199,8 @@ body { margin: 0; }
 .ui-modern .btn-ghost{ background: transparent; }
 
 .ui-modern .btn-danger{
-  background: var(--danger);
-  border-color: var(--danger);
+  background: var(--error);
+  border-color: var(--error);
   color: #fff;
 }
 
@@ -226,6 +243,16 @@ body { margin: 0; }
   background: var(--surface);
   color: var(--text);
 }
+
+/* Ensure form controls use the UI font (some browsers don’t inherit font-family for inputs) */
+.ui-modern input,
+.ui-modern textarea,
+.ui-modern select{
+  font-family: var(--font-sans);
+  font-size: inherit;
+  line-height: inherit;
+}
+
 
 .ui-modern ::placeholder{ color: #64748b; }
 
@@ -567,7 +594,7 @@ input[type="number"]{
 }
 .para-editor:focus{
   border-color: #b8c4d8;
-  box-shadow: 0 0 0 3px rgba(59, 91, 219, 0.12);
+  box-shadow: 0 0 0 3px rgba(74, 102, 227, 0.16);
 }
 
 /* RTE toolbar */
@@ -688,7 +715,7 @@ input[type="number"]{
   box-shadow: 0 1px 3px rgba(0,0,0,.25);
   transition: .2s;
 }
-.switch input:checked + .slider{ background: #22c55e; }
+.switch input:checked + .slider{ background: var(--success); }
 .switch input:checked + .slider:before{ transform: translateX(18px); }
 
 /* Controls toolbar area on body page */
@@ -747,13 +774,17 @@ input[type="number"]{
 }
 
 /* Errors */
-.form-errors{ color: #dc2626; margin-top: .25rem; font-size: 0.95rem; }
+.form-errors{
+  color: var(--error);
+  margin-top: .25rem;
+  font-size: 0.95rem;
+}
 .field{ margin: 8px 0 10px; }
 .field input[type="date"].error,
 .field textarea.error,
 .field input[type="text"].error,
 .field select.error{
-  outline: 2px solid #dc2626;
+  outline: 2px solid var(--error);
   outline-offset: 2px;
-  border-color: #dc2626;
+  border-color: var(--error);
 }
